@@ -138,10 +138,18 @@ def main():
         
         st.divider()
         
+        # Source path configuration
+        st.header("📁 Source Configuration")
+        
+        source_path = st.text_input(
+            "Source of Truth Path",
+            value="repomix-output.txt",
+            help="Path to your codebase file (default: repomix-output.txt)"
+        )
+        
         # File info
-        st.header("📁 Codebase Info")
         try:
-            with open("repomix-output.txt", "r") as f:
+            with open(source_path, "r") as f:
                 content = f.read()
                 lines = len(content.split('\n'))
                 chars = len(content)
@@ -150,7 +158,11 @@ def main():
             st.metric("Total Characters", f"{chars:,}")
             st.success("✅ Codebase loaded successfully")
         except FileNotFoundError:
-            st.error("❌ repomix-output.txt not found!")
+            st.error(f"❌ Source file '{source_path}' not found!")
+            st.info("💡 Make sure the file path is correct and the file exists.")
+            st.stop()
+        except Exception as e:
+            st.error(f"❌ Error reading source file: {str(e)}")
             st.stop()
     
     # Main interface
@@ -198,7 +210,7 @@ def main():
     if analyze_button and title and issue_description:
         with st.spinner("🤖 Analyzing issue with Gemini AI..."):
             try:
-                analyzer = GeminiIssueAnalyzer(api_key=api_key)
+                analyzer = GeminiIssueAnalyzer(api_key=api_key, source_path=source_path)
                 analysis = analyzer.analyze_issue(title, issue_description)
                 
                 # Store in session state
