@@ -16,11 +16,12 @@ load_dotenv()
 class GeminiIssueAnalyzer:
     """Analyzer that uses Google's Gemini AI to analyze code issues."""
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, source_path: Optional[str] = None):
         """Initialize the Gemini analyzer.
         
         Args:
             api_key: Gemini API key. If not provided, will use GEMINI_API_KEY env var.
+            source_path: Path to source of truth file. If not provided, defaults to repomix-output.txt.
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not self.api_key:
@@ -29,16 +30,19 @@ class GeminiIssueAnalyzer:
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel('gemini-1.5-pro')
         
+        # Store source path for codebase loading
+        self.source_path = source_path or "repomix-output.txt"
+        
         # Load the codebase content
         self.codebase_content = self._load_codebase()
     
     def _load_codebase(self) -> str:
-        """Load the codebase content from repomix-output.txt."""
+        """Load the codebase content from the specified source path."""
         try:
-            with open("repomix-output.txt", "r", encoding="utf-8") as f:
+            with open(self.source_path, "r", encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError:
-            raise FileNotFoundError("repomix-output.txt not found. Please ensure it exists in the current directory.")
+            raise FileNotFoundError(f"Source file '{self.source_path}' not found. Please ensure it exists and the path is correct.")
     
     def analyze_issue(self, title: str, issue_description: str) -> IssueAnalysis:
         """Analyze an issue using Gemini AI.

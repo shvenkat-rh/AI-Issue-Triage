@@ -122,6 +122,9 @@ Examples:
   # From file
   python cli.py --file issue.txt
 
+  # With custom source of truth
+  python cli.py --title "Bug" --description "Description" --source-path /path/to/codebase.txt
+
   # Output to file
   python cli.py --title "Bug" --description "Description" --output analysis.txt
 
@@ -162,6 +165,12 @@ Examples:
     )
     
     # Other options
+    parser.add_argument(
+        "--source-path", "-s",
+        type=Path,
+        help="Path to source of truth file (default: repomix-output.txt)"
+    )
+    
     parser.add_argument(
         "--api-key",
         help="Gemini API key (default: from GEMINI_API_KEY env var)"
@@ -247,7 +256,10 @@ Examples:
         if not args.quiet:
             print("🤖 Initializing Gemini analyzer...")
         
-        analyzer = GeminiIssueAnalyzer(api_key=args.api_key)
+        analyzer = GeminiIssueAnalyzer(
+            api_key=args.api_key,
+            source_path=str(args.source_path) if args.source_path else None
+        )
         
         if not args.quiet:
             print("🔍 Analyzing issue...")
