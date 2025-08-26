@@ -4,13 +4,14 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 
 ## Features
 
-- **🤖 AI-Powered Analysis**: Uses Google Gemini 1.5 Pro for intelligent issue analysis
+- **🤖 AI-Powered Analysis**: Uses Google Gemini 2.0 Flash for intelligent issue analysis with the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/)
 - **🔍 Root Cause Analysis**: Identifies primary causes and contributing factors
 - **💡 Solution Generation**: Proposes specific code changes with rationale
 - **🏷️ Issue Triage**: Automatically classifies issues as bugs, enhancements, or feature requests
 - **📊 Severity Assessment**: Rates issues from low to critical priority
 - **🎯 Code Location Mapping**: Identifies relevant files, functions, and classes
 - **📤 Export Capabilities**: Export analysis results in JSON format
+- **⚡ Enhanced Performance**: Faster analysis with the latest Gemini 2.0 Flash model
 
 ## Setup
 
@@ -30,6 +31,8 @@ pip install -r requirements.txt
 cp env_example.txt .env
 # Edit .env and add your API key
 ```
+
+**Note**: The application now uses the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/) with the advanced `gemini-2.0-flash-001` model for faster and more accurate analysis.
 
 ### 3. Prepare Your Codebase
 
@@ -141,6 +144,8 @@ analyzer = GeminiIssueAnalyzer(
     api_key="your-api-key",
     source_path="/path/to/your/codebase.txt"
 )
+
+# Note: The analyzer now uses the Google Gen AI SDK with gemini-2.0-flash-001
 
 # Analyze an issue
 analysis = analyzer.analyze_issue(
