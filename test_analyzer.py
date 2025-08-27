@@ -14,16 +14,16 @@ def test_analyzer():
     # Check if we have an API key
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("❌ GEMINI_API_KEY not found in environment variables.")
+        print("GEMINI_API_KEY not found in environment variables.")
         print("Please create a .env file with your API key.")
         return
     
-    print("🔍 Testing Gemini Issue Analyzer...")
+    print("Testing Gemini Issue Analyzer...")
     
     try:
         # Initialize analyzer
         analyzer = GeminiIssueAnalyzer()
-        print("✅ Analyzer initialized successfully")
+        print("Analyzer initialized successfully")
         
         # Test cases
         test_cases = [
@@ -75,7 +75,7 @@ def test_analyzer():
         
         # Analyze each test case
         for i, test_case in enumerate(test_cases, 1):
-            print(f"\n📋 Test Case {i}: {test_case['title']}")
+            print(f"\nTest Case {i}: {test_case['title']}")
             print("=" * 60)
             
             try:
@@ -84,23 +84,23 @@ def test_analyzer():
                     test_case["description"]
                 )
                 
-                print(f"✅ Analysis completed!")
-                print(f"📊 Issue Type: {analysis.issue_type.value}")
-                print(f"⚠️  Severity: {analysis.severity.value}")
-                print(f"🎯 Confidence: {analysis.confidence_score:.1%}")
-                print(f"🔍 Primary Cause: {analysis.root_cause_analysis.primary_cause}")
-                print(f"💡 Solutions: {len(analysis.proposed_solutions)} proposed")
+                print(f"Analysis completed!")
+                print(f"Issue Type: {analysis.issue_type.value}")
+                print(f"Severity: {analysis.severity.value}")
+                print(f"Confidence: {analysis.confidence_score:.1%}")
+                print(f"Primary Cause: {analysis.root_cause_analysis.primary_cause}")
+                print(f"Solutions: {len(analysis.proposed_solutions)} proposed")
                 
                 if analysis.proposed_solutions:
                     print(f"   First solution: {analysis.proposed_solutions[0].description}")
                 
             except Exception as e:
-                print(f"❌ Analysis failed: {str(e)}")
+                print(f"Analysis failed: {str(e)}")
         
-        print(f"\n🎉 Testing completed successfully!")
+        print(f"\nTesting completed successfully!")
         
     except Exception as e:
-        print(f"❌ Initialization failed: {str(e)}")
+        print(f"Initialization failed: {str(e)}")
 
 
 if __name__ == "__main__":

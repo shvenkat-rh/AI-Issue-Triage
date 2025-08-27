@@ -1,16 +1,18 @@
-# 🔍 Gemini Issue Analyzer
+# Gemini Issue Analyzer
 
 An AI-powered issue analysis tool that uses Google's Gemini AI to perform comprehensive analysis of software issues based on your codebase content.
 
 ## Features
 
-- **🤖 AI-Powered Analysis**: Uses Google Gemini 1.5 Pro for intelligent issue analysis
-- **🔍 Root Cause Analysis**: Identifies primary causes and contributing factors
-- **💡 Solution Generation**: Proposes specific code changes with rationale
-- **🏷️ Issue Triage**: Automatically classifies issues as bugs, enhancements, or feature requests
-- **📊 Severity Assessment**: Rates issues from low to critical priority
-- **🎯 Code Location Mapping**: Identifies relevant files, functions, and classes
-- **📤 Export Capabilities**: Export analysis results in JSON format
+- **AI-Powered Analysis**: Uses Google Gemini 2.0 Flash for intelligent issue analysis with the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/)
+- **Root Cause Analysis**: Identifies primary causes and contributing factors
+- **Solution Generation**: Proposes specific code changes with rationale
+- **Issue Triage**: Automatically classifies issues as bugs, enhancements, or feature requests
+- **Severity Assessment**: Rates issues from low to critical priority
+- **Code Location Mapping**: Identifies relevant files, functions, and classes
+- **Export Capabilities**: Export analysis results in JSON format
+- **Enhanced Performance**: Faster analysis with the latest Gemini 2.0 Flash model
+- **Smart Retry Mechanism**: Automatically retries analysis if low-quality responses are detected
 
 ## Setup
 
@@ -30,6 +32,8 @@ pip install -r requirements.txt
 cp env_example.txt .env
 # Edit .env and add your API key
 ```
+
+**Note**: The application now uses the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/) with the advanced `gemini-2.0-flash-001` model for faster and more accurate analysis.
 
 ### 3. Prepare Your Codebase
 
@@ -86,6 +90,9 @@ python cli.py --file sample_issue.txt
 # Use custom source of truth file
 python cli.py --title "Bug" --description "Description" --source-path /path/to/my-codebase.txt
 
+# Use custom prompt template
+python cli.py --title "Bug" --description "Description" --custom-prompt /path/to/custom_prompt.txt
+
 # Save output to file
 python cli.py --title "Bug" --description "Description" --output analysis.txt
 
@@ -94,6 +101,9 @@ python cli.py --title "Bug" --description "Description" --format json
 
 # Quiet mode (no progress messages)
 python cli.py --quiet --title "Bug" --description "Description"
+
+# Configure retry attempts for better quality
+python cli.py --title "Bug" --description "Description" --retries 3
 ```
 
 #### CLI Options
@@ -142,6 +152,8 @@ analyzer = GeminiIssueAnalyzer(
     source_path="/path/to/your/codebase.txt"
 )
 
+# Note: The analyzer now uses the Google Gen AI SDK with gemini-2.0-flash-001
+
 # Analyze an issue
 analysis = analyzer.analyze_issue(
     title="Login page crashes on mobile",
@@ -183,6 +195,85 @@ python cli.py -s ../other-project/codebase.txt --title "Issue" --description "De
 - Keep the file updated when your codebase changes
 - Consider excluding large binary files or dependencies
 - Include configuration files, documentation, and tests for better analysis
+
+## Custom Prompt Templates
+
+You can customize how the AI analyzes your issues by providing your own prompt template. This gives you complete control over the analysis style and focus areas.
+
+### Creating a Custom Prompt
+
+1. **Create a text file** with your custom prompt template
+2. **Use placeholders** for dynamic content:
+   - `{title}` - Issue title
+   - `{issue_description}` - Issue description  
+   - `{codebase_content}` - Full codebase content
+
+3. **Example custom prompt** (`my_prompt.txt`):
+```
+You are a security-focused code reviewer analyzing the following issue:
+
+Title: {title}
+Description: {issue_description}
+
+Codebase: {codebase_content}
+
+Focus on:
+- Security vulnerabilities
+- Input validation issues
+- Authentication/authorization problems
+- Data exposure risks
+
+Provide analysis in JSON format with security_risks field.
+```
+
+### Using Custom Prompts
+
+```bash
+# CLI usage
+python cli.py --title "Security Issue" --description "Details..." --custom-prompt my_prompt.txt
+
+# Web UI usage
+# Enter the path in the "Custom Prompt Path" field in the sidebar
+```
+
+### Custom Prompt Use Cases
+- **Security Analysis**: Focus on vulnerabilities and security best practices
+- **Performance Review**: Emphasize performance optimization opportunities
+- **Architecture Review**: Concentrate on design patterns and architectural improvements
+- **Compliance Check**: Ensure code meets specific coding standards or regulations
+- **Domain-Specific**: Tailor analysis for specific frameworks or technologies
+
+## Smart Retry Mechanism
+
+The analyzer includes an intelligent retry system that automatically detects low-quality responses and retries the analysis for better results.
+
+### How It Works
+
+The system automatically identifies responses that contain:
+- Generic phrases like "requires further investigation" or "to be determined"
+- Very low confidence scores (< 60%)
+- Vague file paths or empty solutions
+- Short or incomplete analysis summaries
+
+### Configuration
+
+```bash
+# Default: 2 retries
+python cli.py --title "Issue" --description "Details"
+
+# Custom retry count
+python cli.py --title "Issue" --description "Details" --retries 3
+
+# Disable retries
+python cli.py --title "Issue" --description "Details" --retries 0
+```
+
+### Benefits
+
+- **Higher Quality**: Automatically improves analysis quality
+- **Reliability**: Reduces chance of getting generic responses  
+- **Transparency**: Shows retry attempts in progress messages
+- **Configurable**: Adjust retry count based on your needs
 
 ## Analysis Components
 

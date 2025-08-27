@@ -17,9 +17,9 @@ def format_analysis_text(analysis) -> str:
     
     # Header
     output = []
-    output.append("=" * 80)
+    
     output.append(f"GEMINI ISSUE ANALYSIS REPORT")
-    output.append("=" * 80)
+    
     output.append(f"Title: {analysis.title}")
     output.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     output.append("")
@@ -102,7 +102,7 @@ def format_analysis_text(analysis) -> str:
         if i < len(analysis.proposed_solutions):
             output.append("-" * 40)
     
-    output.append("=" * 80)
+    
     return "\n".join(output)
 
 
@@ -124,6 +124,12 @@ Examples:
 
   # With custom source of truth
   python cli.py --title "Bug" --description "Description" --source-path /path/to/codebase.txt
+
+  # With custom prompt template
+  python cli.py --title "Bug" --description "Description" --custom-prompt /path/to/prompt.txt
+  
+  # Configure retry attempts
+  python cli.py --title "Bug" --description "Description" --retries 3
 
   # Output to file
   python cli.py --title "Bug" --description "Description" --output analysis.txt
@@ -172,8 +178,21 @@ Examples:
     )
     
     parser.add_argument(
+        "--custom-prompt",
+        type=Path,
+        help="Path to custom prompt template file (overrides default prompt)"
+    )
+    
+    parser.add_argument(
         "--api-key",
         help="Gemini API key (default: from GEMINI_API_KEY env var)"
+    )
+    
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=2,
+        help="Maximum number of retry attempts for low quality responses (default: 2)"
     )
     
     parser.add_argument(
@@ -219,7 +238,7 @@ Examples:
     else:
         # Interactive mode
         if not args.quiet:
-            print("🔍 Gemini Issue Analyzer - Interactive Mode")
+            print("Gemini Issue Analyzer - Interactive Mode")
             print("=" * 50)
         
         try:
@@ -254,20 +273,21 @@ Examples:
     # Initialize analyzer
     try:
         if not args.quiet:
-            print("🤖 Initializing Gemini analyzer...")
+            print("Initializing Gemini analyzer...")
         
         analyzer = GeminiIssueAnalyzer(
             api_key=args.api_key,
-            source_path=str(args.source_path) if args.source_path else None
+            source_path=str(args.source_path) if args.source_path else None,
+            custom_prompt_path=str(args.custom_prompt) if args.custom_prompt else None
         )
         
         if not args.quiet:
-            print("🔍 Analyzing issue...")
+            print("Analyzing issue...")
         
-        analysis = analyzer.analyze_issue(title, description)
+        analysis = analyzer.analyze_issue(title, description, max_retries=args.retries)
         
         if not args.quiet:
-            print("✅ Analysis complete!")
+            print("Analysis complete!")
             print()
     
     except Exception as e:
@@ -285,7 +305,7 @@ Examples:
         try:
             args.output.write_text(output_text)
             if not args.quiet:
-                print(f"📄 Analysis saved to {args.output}")
+                print(f"Analysis saved to {args.output}")
         except Exception as e:
             print(f"Error writing to file: {e}", file=sys.stderr)
             sys.exit(1)
