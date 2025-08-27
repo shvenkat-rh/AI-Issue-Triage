@@ -17,9 +17,9 @@ def format_analysis_text(analysis) -> str:
     
     # Header
     output = []
-    output.append("=" * 80)
+    
     output.append(f"GEMINI ISSUE ANALYSIS REPORT")
-    output.append("=" * 80)
+    
     output.append(f"Title: {analysis.title}")
     output.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     output.append("")
@@ -102,7 +102,7 @@ def format_analysis_text(analysis) -> str:
         if i < len(analysis.proposed_solutions):
             output.append("-" * 40)
     
-    output.append("=" * 80)
+    
     return "\n".join(output)
 
 
