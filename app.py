@@ -147,6 +147,12 @@ def main():
             help="Path to your codebase file (default: repomix-output.txt)"
         )
         
+        custom_prompt_path = st.text_input(
+            "Custom Prompt Path (Optional)",
+            value="",
+            help="Path to custom prompt template file (leave empty for default prompt)"
+        )
+        
         # File info
         try:
             with open(source_path, "r") as f:
@@ -210,7 +216,11 @@ def main():
     if analyze_button and title and issue_description:
         with st.spinner("🤖 Analyzing issue with Gemini AI..."):
             try:
-                analyzer = GeminiIssueAnalyzer(api_key=api_key, source_path=source_path)
+                analyzer = GeminiIssueAnalyzer(
+                    api_key=api_key, 
+                    source_path=source_path,
+                    custom_prompt_path=custom_prompt_path if custom_prompt_path.strip() else None
+                )
                 analysis = analyzer.analyze_issue(title, issue_description)
                 
                 # Store in session state

@@ -89,6 +89,9 @@ python cli.py --file sample_issue.txt
 # Use custom source of truth file
 python cli.py --title "Bug" --description "Description" --source-path /path/to/my-codebase.txt
 
+# Use custom prompt template
+python cli.py --title "Bug" --description "Description" --custom-prompt /path/to/custom_prompt.txt
+
 # Save output to file
 python cli.py --title "Bug" --description "Description" --output analysis.txt
 
@@ -188,6 +191,53 @@ python cli.py -s ../other-project/codebase.txt --title "Issue" --description "De
 - Keep the file updated when your codebase changes
 - Consider excluding large binary files or dependencies
 - Include configuration files, documentation, and tests for better analysis
+
+## Custom Prompt Templates
+
+You can customize how the AI analyzes your issues by providing your own prompt template. This gives you complete control over the analysis style and focus areas.
+
+### Creating a Custom Prompt
+
+1. **Create a text file** with your custom prompt template
+2. **Use placeholders** for dynamic content:
+   - `{title}` - Issue title
+   - `{issue_description}` - Issue description  
+   - `{codebase_content}` - Full codebase content
+
+3. **Example custom prompt** (`my_prompt.txt`):
+```
+You are a security-focused code reviewer analyzing the following issue:
+
+Title: {title}
+Description: {issue_description}
+
+Codebase: {codebase_content}
+
+Focus on:
+- Security vulnerabilities
+- Input validation issues
+- Authentication/authorization problems
+- Data exposure risks
+
+Provide analysis in JSON format with security_risks field.
+```
+
+### Using Custom Prompts
+
+```bash
+# CLI usage
+python cli.py --title "Security Issue" --description "Details..." --custom-prompt my_prompt.txt
+
+# Web UI usage
+# Enter the path in the "Custom Prompt Path" field in the sidebar
+```
+
+### Custom Prompt Use Cases
+- **Security Analysis**: Focus on vulnerabilities and security best practices
+- **Performance Review**: Emphasize performance optimization opportunities
+- **Architecture Review**: Concentrate on design patterns and architectural improvements
+- **Compliance Check**: Ensure code meets specific coding standards or regulations
+- **Domain-Specific**: Tailor analysis for specific frameworks or technologies
 
 ## Analysis Components
 

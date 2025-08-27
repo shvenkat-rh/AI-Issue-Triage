@@ -125,6 +125,9 @@ Examples:
   # With custom source of truth
   python cli.py --title "Bug" --description "Description" --source-path /path/to/codebase.txt
 
+  # With custom prompt template
+  python cli.py --title "Bug" --description "Description" --custom-prompt /path/to/prompt.txt
+
   # Output to file
   python cli.py --title "Bug" --description "Description" --output analysis.txt
 
@@ -169,6 +172,12 @@ Examples:
         "--source-path", "-s",
         type=Path,
         help="Path to source of truth file (default: repomix-output.txt)"
+    )
+    
+    parser.add_argument(
+        "--custom-prompt",
+        type=Path,
+        help="Path to custom prompt template file (overrides default prompt)"
     )
     
     parser.add_argument(
@@ -258,7 +267,8 @@ Examples:
         
         analyzer = GeminiIssueAnalyzer(
             api_key=args.api_key,
-            source_path=str(args.source_path) if args.source_path else None
+            source_path=str(args.source_path) if args.source_path else None,
+            custom_prompt_path=str(args.custom_prompt) if args.custom_prompt else None
         )
         
         if not args.quiet:

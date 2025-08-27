@@ -17,12 +17,13 @@ load_dotenv()
 class GeminiIssueAnalyzer:
     """Analyzer that uses Google's Gemini AI to analyze code issues."""
     
-    def __init__(self, api_key: Optional[str] = None, source_path: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, source_path: Optional[str] = None, custom_prompt_path: Optional[str] = None):
         """Initialize the Gemini analyzer.
         
         Args:
             api_key: Gemini API key. If not provided, will use GEMINI_API_KEY env var.
             source_path: Path to source of truth file. If not provided, defaults to repomix-output.txt.
+            custom_prompt_path: Path to custom prompt template file. If not provided, uses default prompt.
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
@@ -34,6 +35,9 @@ class GeminiIssueAnalyzer:
         
         # Store source path for codebase loading
         self.source_path = source_path or "repomix-output.txt"
+        
+        # Store custom prompt path
+        self.custom_prompt_path = custom_prompt_path
         
         # Load the codebase content
         self.codebase_content = self._load_codebase()
@@ -76,6 +80,30 @@ class GeminiIssueAnalyzer:
     
     def _create_analysis_prompt(self, title: str, issue_description: str) -> str:
         """Create a detailed prompt for Gemini analysis."""
+        if self.custom_prompt_path:
+            return self._load_custom_prompt(title, issue_description)
+        
+        return self._get_default_prompt(title, issue_description)
+    
+    def _load_custom_prompt(self, title: str, issue_description: str) -> str:
+        """Load and process custom prompt template."""
+        try:
+            with open(self.custom_prompt_path, "r", encoding="utf-8") as f:
+                custom_prompt_template = f.read()
+            
+            # Replace placeholders in the custom prompt
+            return custom_prompt_template.format(
+                title=title,
+                issue_description=issue_description,
+                codebase_content=self.codebase_content
+            )
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Custom prompt file '{self.custom_prompt_path}' not found. Please ensure it exists and the path is correct.")
+        except KeyError as e:
+            raise ValueError(f"Custom prompt template missing required placeholder: {e}. Available placeholders: {{title}}, {{issue_description}}, {{codebase_content}}")
+    
+    def _get_default_prompt(self, title: str, issue_description: str) -> str:
+        """Get the default analysis prompt."""
         return f"""
 You are an expert software engineer analyzing a code issue for an Ansible Creator project. 
 Your task is to perform comprehensive issue analysis based on the provided codebase.
@@ -85,7 +113,7 @@ Title: {title}
 Description: {issue_description}
 
 CODEBASE CONTENT:
-{self.codebase_content[:50000]}  # Limiting to first 50k chars for context
+{self.codebase_content}
 
 ANALYSIS REQUIREMENTS:
 1. **Issue Classification**: Determine if this is a 'bug', 'enhancement', or 'feature_request'
