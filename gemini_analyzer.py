@@ -44,30 +44,47 @@ class GeminiIssueAnalyzer:
         except FileNotFoundError:
             raise FileNotFoundError(f"Source file '{self.source_path}' not found. Please ensure it exists and the path is correct.")
     
-    def analyze_issue(self, title: str, issue_description: str) -> IssueAnalysis:
-        """Analyze an issue using Gemini AI.
+    def analyze_issue(self, title: str, issue_description: str, max_retries: int = 2) -> IssueAnalysis:
+        """Analyze an issue using Gemini AI with retry mechanism.
         
         Args:
             title: Issue title
             issue_description: Detailed issue description
+            max_retries: Maximum number of retry attempts (default: 2)
             
         Returns:
             Complete issue analysis
         """
-        prompt = self._create_analysis_prompt(title, issue_description)
-        
-        try:
-            response = self.model.generate_content(prompt)
-            analysis_data = self._parse_gemini_response(response.text)
-            
-            return IssueAnalysis(
-                title=title,
-                description=issue_description,
-                **analysis_data
-            )
-        except Exception as e:
-            # Fallback analysis if Gemini fails
-            return self._create_fallback_analysis(title, issue_description, str(e))
+        for attempt in range(max_retries + 1):
+            try:
+                prompt = self._create_analysis_prompt(title, issue_description)
+                
+                response = self.model.generate_content(prompt)
+                analysis_data = self._parse_gemini_response(response.text)
+                
+                analysis = IssueAnalysis(
+                    title=title,
+                    description=issue_description,
+                    **analysis_data
+                )
+                
+                # Check if this is a low-quality/fallback response
+                if self._is_low_quality_response(analysis):
+                    if attempt < max_retries:
+                        print(f"Low quality response detected, retrying... (attempt {attempt + 2}/{max_retries + 1})")
+                        continue
+                    else:
+                        print("Max retries reached, returning best available analysis")
+                
+                return analysis
+                
+            except Exception as e:
+                if attempt < max_retries:
+                    print(f"Analysis failed, retrying... (attempt {attempt + 2}/{max_retries + 1})")
+                    continue
+                else:
+                    # Fallback analysis if all attempts fail
+                    return self._create_fallback_analysis(title, issue_description, str(e))
     
     def _create_analysis_prompt(self, title: str, issue_description: str) -> str:
         """Create a detailed prompt for Gemini analysis."""
@@ -132,6 +149,36 @@ ANALYSIS GUIDELINES:
 
 Please analyze the issue and provide your response in the exact JSON format specified above.
 """
+    
+    def _is_low_quality_response(self, analysis: IssueAnalysis) -> bool:
+        """Check if the analysis response is low quality and should be retried."""
+        low_quality_indicators = [
+            # Check for generic/fallback descriptions
+            "requires further investigation" in analysis.root_cause_analysis.primary_cause.lower(),
+            "to be determined" in analysis.root_cause_analysis.primary_cause.lower(),
+            "based on initial analysis" in analysis.root_cause_analysis.primary_cause.lower(),
+            
+            # Check for generic solution descriptions
+            any("requires further investigation" in solution.description.lower() 
+                for solution in analysis.proposed_solutions),
+            any("to be determined" in solution.code_changes.lower() 
+                for solution in analysis.proposed_solutions),
+            any("based on initial analysis" in solution.rationale.lower() 
+                for solution in analysis.proposed_solutions),
+            
+            # Check for very low confidence
+            analysis.confidence_score < 0.6,
+            
+            # Check for generic file paths
+            any(solution.location.file_path == "src/ansible_creator/" 
+                for solution in analysis.proposed_solutions),
+            
+            # Check for empty or very short analysis
+            len(analysis.analysis_summary.strip()) < 50,
+        ]
+        
+        # Return True if any low quality indicators are present
+        return any(low_quality_indicators)
     
     def _parse_gemini_response(self, response_text: str) -> Dict[str, Any]:
         """Parse Gemini's response and extract analysis data."""

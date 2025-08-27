@@ -11,6 +11,7 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 - **📊 Severity Assessment**: Rates issues from low to critical priority
 - **🎯 Code Location Mapping**: Identifies relevant files, functions, and classes
 - **📤 Export Capabilities**: Export analysis results in JSON format
+- **🔄 Smart Retry Mechanism**: Automatically retries analysis if low-quality responses are detected
 
 ## Setup
 
@@ -94,6 +95,9 @@ python cli.py --title "Bug" --description "Description" --format json
 
 # Quiet mode (no progress messages)
 python cli.py --quiet --title "Bug" --description "Description"
+
+# Configure retry attempts for better quality
+python cli.py --title "Bug" --description "Description" --retries 3
 ```
 
 #### CLI Options
@@ -183,6 +187,38 @@ python cli.py -s ../other-project/codebase.txt --title "Issue" --description "De
 - Keep the file updated when your codebase changes
 - Consider excluding large binary files or dependencies
 - Include configuration files, documentation, and tests for better analysis
+
+## Smart Retry Mechanism
+
+The analyzer includes an intelligent retry system that automatically detects low-quality responses and retries the analysis for better results.
+
+### How It Works
+
+The system automatically identifies responses that contain:
+- Generic phrases like "requires further investigation" or "to be determined"
+- Very low confidence scores (< 60%)
+- Vague file paths or empty solutions
+- Short or incomplete analysis summaries
+
+### Configuration
+
+```bash
+# Default: 2 retries
+python cli.py --title "Issue" --description "Details"
+
+# Custom retry count
+python cli.py --title "Issue" --description "Details" --retries 3
+
+# Disable retries
+python cli.py --title "Issue" --description "Details" --retries 0
+```
+
+### Benefits
+
+- **Higher Quality**: Automatically improves analysis quality
+- **Reliability**: Reduces chance of getting generic responses  
+- **Transparency**: Shows retry attempts in progress messages
+- **Configurable**: Adjust retry count based on your needs
 
 ## Analysis Components
 

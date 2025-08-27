@@ -130,6 +130,9 @@ Examples:
 
   # JSON output
   python cli.py --title "Bug" --description "Description" --format json
+
+  # Configure retry attempts
+  python cli.py --title "Bug" --description "Description" --retries 3
         """
     )
     
@@ -174,6 +177,13 @@ Examples:
     parser.add_argument(
         "--api-key",
         help="Gemini API key (default: from GEMINI_API_KEY env var)"
+    )
+    
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=2,
+        help="Maximum number of retry attempts for low quality responses (default: 2)"
     )
     
     parser.add_argument(
@@ -264,7 +274,7 @@ Examples:
         if not args.quiet:
             print("🔍 Analyzing issue...")
         
-        analysis = analyzer.analyze_issue(title, description)
+        analysis = analyzer.analyze_issue(title, description, max_retries=args.retries)
         
         if not args.quiet:
             print("✅ Analysis complete!")
