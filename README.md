@@ -1,17 +1,17 @@
-# 🔍 Gemini Issue Analyzer
+# Gemini Issue Analyzer
 
 An AI-powered issue analysis tool that uses Google's Gemini AI to perform comprehensive analysis of software issues based on your codebase content.
 
 ## Features
 
-- **🤖 AI-Powered Analysis**: Uses Google Gemini 2.0 Flash for intelligent issue analysis with the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/)
-- **🔍 Root Cause Analysis**: Identifies primary causes and contributing factors
-- **💡 Solution Generation**: Proposes specific code changes with rationale
-- **🏷️ Issue Triage**: Automatically classifies issues as bugs, enhancements, or feature requests
-- **📊 Severity Assessment**: Rates issues from low to critical priority
-- **🎯 Code Location Mapping**: Identifies relevant files, functions, and classes
-- **📤 Export Capabilities**: Export analysis results in JSON format
-- **⚡ Enhanced Performance**: Faster analysis with the latest Gemini 2.0 Flash model
+- **AI-Powered Analysis**: Uses Google Gemini 2.0 Flash for intelligent issue analysis with the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/)
+- **Root Cause Analysis**: Identifies primary causes and contributing factors
+- **Solution Generation**: Proposes specific code changes with rationale
+- **Issue Triage**: Automatically classifies issues as bugs, enhancements, or feature requests
+- **Severity Assessment**: Rates issues from low to critical priority
+- **Code Location Mapping**: Identifies relevant files, functions, and classes
+- **Export Capabilities**: Export analysis results in JSON format
+- **Enhanced Performance**: Faster analysis with the latest Gemini 2.0 Flash model
 
 ## Setup
 

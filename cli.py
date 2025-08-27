@@ -228,7 +228,7 @@ Examples:
     else:
         # Interactive mode
         if not args.quiet:
-            print("🔍 Gemini Issue Analyzer - Interactive Mode")
+            print("Gemini Issue Analyzer - Interactive Mode")
             print("=" * 50)
         
         try:
@@ -263,7 +263,7 @@ Examples:
     # Initialize analyzer
     try:
         if not args.quiet:
-            print("🤖 Initializing Gemini analyzer...")
+            print("Initializing Gemini analyzer...")
         
         analyzer = GeminiIssueAnalyzer(
             api_key=args.api_key,
@@ -272,12 +272,12 @@ Examples:
         )
         
         if not args.quiet:
-            print("🔍 Analyzing issue...")
+            print("Analyzing issue...")
         
         analysis = analyzer.analyze_issue(title, description)
         
         if not args.quiet:
-            print("✅ Analysis complete!")
+            print("Analysis complete!")
             print()
     
     except Exception as e:
@@ -295,7 +295,7 @@ Examples:
         try:
             args.output.write_text(output_text)
             if not args.quiet:
-                print(f"📄 Analysis saved to {args.output}")
+                print(f"Analysis saved to {args.output}")
         except Exception as e:
             print(f"Error writing to file: {e}", file=sys.stderr)
             sys.exit(1)
