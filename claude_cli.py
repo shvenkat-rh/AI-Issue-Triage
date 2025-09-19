@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line interface for Gemini Issue Analyzer.
+"""Command-line interface for Claude Issue Analyzer.
 
 COMMAND LINE OPTIONS:
 
@@ -14,8 +14,9 @@ CONFIGURATION OPTIONS:
                                information (default: repomix-output.txt)
   --custom-prompt PATH         Path to custom prompt template file that overrides
                                the default analysis prompt
-  --api-key TEXT               Gemini API key for authentication 
-                               (default: from GEMINI_API_KEY env var)
+  --api-key TEXT               Anthropic API key or GCP Project ID for Vertex AI
+                               (default: from ANTHROPIC_API_KEY or 
+                               ANTHROPIC_VERTEX_PROJECT_ID env var)
   --retries INTEGER            Maximum number of retry attempts for low quality
                                responses (default: 2)
 
@@ -44,7 +45,10 @@ OUTPUT FORMATS:
   - json: Structured JSON data suitable for programmatic processing
 
 ENVIRONMENT VARIABLES:
-  GEMINI_API_KEY              API key for Gemini service (alternative to --api-key)
+  ANTHROPIC_API_KEY           API key for Anthropic Claude service (alternative to --api-key)
+  ANTHROPIC_VERTEX_PROJECT_ID GCP Project ID for Claude Code via Vertex AI
+  CLAUDE_CODE_USE_VERTEX      Set to "1" to enable Vertex AI mode
+  CLOUD_ML_REGION             GCP region for Vertex AI (default: us-east5)
 """
 
 import argparse
@@ -54,7 +58,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from gemini_analyzer import GeminiIssueAnalyzer
+from claude_analyzer import ClaudeIssueAnalyzer
 from models import IssueType, Severity
 
 
@@ -64,7 +68,7 @@ def format_analysis_text(analysis) -> str:
     # Header
     output = []
     
-    output.append(f"GEMINI ISSUE ANALYSIS REPORT")
+    output.append(f"CLAUDE ISSUE ANALYSIS REPORT")
     
     output.append(f"Title: {analysis.title}")
     output.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -155,33 +159,33 @@ def format_analysis_text(analysis) -> str:
 def main():
     """Main CLI function."""
     parser = argparse.ArgumentParser(
-        description="Gemini Issue Analyzer - AI-powered issue analysis for codebases",
+        description="Claude Issue Analyzer - AI-powered issue analysis for codebases using Anthropic Claude",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Interactive mode
-  python cli.py
+  python claude_cli.py
 
   # Direct analysis
-  python cli.py --title "Login bug" --description "Users can't login"
+  python claude_cli.py --title "Login bug" --description "Users can't login"
 
   # From file
-  python cli.py --file issue.txt
+  python claude_cli.py --file issue.txt
 
   # With custom source of truth
-  python cli.py --title "Bug" --description "Description" --source-path /path/to/codebase.txt
+  python claude_cli.py --title "Bug" --description "Description" --source-path /path/to/codebase.txt
 
   # With custom prompt template
-  python cli.py --title "Bug" --description "Description" --custom-prompt /path/to/prompt.txt
+  python claude_cli.py --title "Bug" --description "Description" --custom-prompt /path/to/prompt.txt
   
   # Configure retry attempts
-  python cli.py --title "Bug" --description "Description" --retries 3
+  python claude_cli.py --title "Bug" --description "Description" --retries 3
 
   # Output to file
-  python cli.py --title "Bug" --description "Description" --output analysis.txt
+  python claude_cli.py --title "Bug" --description "Description" --output analysis.txt
 
   # JSON output
-  python cli.py --title "Bug" --description "Description" --format json
+  python claude_cli.py --title "Bug" --description "Description" --format json
         """
     )
     
@@ -231,7 +235,7 @@ Examples:
     
     parser.add_argument(
         "--api-key",
-        help="Gemini API key (default: from GEMINI_API_KEY env var)"
+        help="Anthropic API key or GCP Project ID for Vertex AI (default: from ANTHROPIC_API_KEY or ANTHROPIC_VERTEX_PROJECT_ID env var)"
     )
     
     parser.add_argument(
@@ -250,7 +254,7 @@ Examples:
     parser.add_argument(
         "--version",
         action="version",
-        version="Gemini Issue Analyzer 1.0.0"
+        version="Claude Issue Analyzer 1.0.0"
     )
     
     args = parser.parse_args()
@@ -284,7 +288,7 @@ Examples:
     else:
         # Interactive mode
         if not args.quiet:
-            print("Gemini Issue Analyzer - Interactive Mode")
+            print("Claude Issue Analyzer - Interactive Mode")
             print("=" * 50)
         
         try:
@@ -319,9 +323,9 @@ Examples:
     # Initialize analyzer
     try:
         if not args.quiet:
-            print("Initializing Gemini analyzer...")
+            print("Initializing Claude analyzer...")
         
-        analyzer = GeminiIssueAnalyzer(
+        analyzer = ClaudeIssueAnalyzer(
             api_key=args.api_key,
             source_path=str(args.source_path) if args.source_path else None,
             custom_prompt_path=str(args.custom_prompt) if args.custom_prompt else None
@@ -361,3 +365,5 @@ Examples:
 
 if __name__ == "__main__":
     main()
+
+
