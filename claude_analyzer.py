@@ -1,11 +1,10 @@
-"""Gemini-powered issue analyzer for code repositories."""
+"""Claude-powered issue analyzer for code repositories."""
 
 import os
 import re
 import json
 from typing import Optional, Dict, Any
-from google import genai
-from google.genai import types
+from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from models import IssueAnalysis, IssueType, Severity, RootCauseAnalysis, CodeSolution, CodeLocation
@@ -14,24 +13,44 @@ from models import IssueAnalysis, IssueType, Severity, RootCauseAnalysis, CodeSo
 load_dotenv()
 
 
-class GeminiIssueAnalyzer:
-    """Analyzer that uses Google's Gemini AI to analyze code issues."""
+class ClaudeIssueAnalyzer:
+    """Analyzer that uses Anthropic's Claude AI to analyze code issues."""
     
     def __init__(self, api_key: Optional[str] = None, source_path: Optional[str] = None, custom_prompt_path: Optional[str] = None):
-        """Initialize the Gemini analyzer.
+        """Initialize the Claude analyzer.
         
         Args:
-            api_key: Gemini API key. If not provided, will use GEMINI_API_KEY env var.
+            api_key: Anthropic API key or project ID for Vertex AI. If not provided, will use ANTHROPIC_API_KEY or ANTHROPIC_VERTEX_PROJECT_ID env var.
             source_path: Path to source of truth file. If not provided, defaults to repomix-output.txt.
             custom_prompt_path: Path to custom prompt template file. If not provided, uses default prompt.
         """
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        if not self.api_key:
-            raise ValueError("Gemini API key not found. Set GEMINI_API_KEY or GOOGLE_API_KEY environment variable.")
+        # Check for Vertex AI configuration first
+        vertex_project_id = api_key or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID")
+        anthropic_api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        use_vertex = os.getenv("CLAUDE_CODE_USE_VERTEX") == "1"
         
-        # Initialize the new Gen AI client
-        self.client = genai.Client(api_key=self.api_key)
-        self.model_name = 'gemini-2.0-flash-001'
+        if vertex_project_id and (use_vertex or not anthropic_api_key):
+            # Using Vertex AI with Claude Code
+            # Set required environment variables for Vertex AI
+            os.environ["ANTHROPIC_VERTEX_PROJECT_ID"] = vertex_project_id
+            if not os.getenv("CLOUD_ML_REGION"):
+                os.environ["CLOUD_ML_REGION"] = "us-east5"  # Default region for Claude Code
+            if not os.getenv("CLAUDE_CODE_USE_VERTEX"):
+                os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+            
+            # Initialize Anthropic client for Vertex AI
+            self.client = Anthropic()  # Will automatically use Vertex AI when env vars are set
+            self.vertex_project_id = vertex_project_id
+            self.is_vertex = True
+            
+        elif anthropic_api_key:
+            # Using direct Anthropic API
+            self.client = Anthropic(api_key=anthropic_api_key)
+            self.is_vertex = False
+        else:
+            raise ValueError("Either ANTHROPIC_API_KEY or ANTHROPIC_VERTEX_PROJECT_ID environment variable must be set.")
+        
+        self.model_name = 'claude-3-5-sonnet-20241022'
         
         # Store source path for codebase loading
         self.source_path = source_path or "repomix-output.txt"
@@ -51,7 +70,7 @@ class GeminiIssueAnalyzer:
             raise FileNotFoundError(f"Source file '{self.source_path}' not found. Please ensure it exists and the path is correct.")
     
     def analyze_issue(self, title: str, issue_description: str, max_retries: int = 2) -> IssueAnalysis:
-        """Analyze an issue using Gemini AI with retry mechanism.
+        """Analyze an issue using Claude AI with retry mechanism.
         
         Args:
             title: Issue title
@@ -65,11 +84,18 @@ class GeminiIssueAnalyzer:
             try:
                 prompt = self._create_analysis_prompt(title, issue_description)
                 
-                response = self.client.models.generate_content(
+                response = self.client.messages.create(
                     model=self.model_name,
-                    contents=prompt
+                    max_tokens=4000,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
                 )
-                analysis_data = self._parse_gemini_response(response.text)
+                
+                analysis_data = self._parse_claude_response(response.content[0].text)
                 
                 analysis = IssueAnalysis(
                     title=title,
@@ -96,7 +122,7 @@ class GeminiIssueAnalyzer:
                     return self._create_fallback_analysis(title, issue_description, str(e))
     
     def _create_analysis_prompt(self, title: str, issue_description: str) -> str:
-        """Create a detailed prompt for Gemini analysis."""
+        """Create a detailed prompt for Claude analysis."""
         if self.custom_prompt_path:
             return self._load_custom_prompt(title, issue_description)
         
@@ -213,8 +239,8 @@ Please analyze the issue and provide your response in the exact JSON format spec
         # Return True if any low quality indicators are present
         return any(low_quality_indicators)
     
-    def _parse_gemini_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse Gemini's response and extract analysis data."""
+    def _parse_claude_response(self, response_text: str) -> Dict[str, Any]:
+        """Parse Claude's response and extract analysis data."""
         try:
             # Try to extract JSON from the response
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
@@ -269,7 +295,7 @@ Please analyze the issue and provide your response in the exact JSON format spec
         }
     
     def _create_fallback_analysis(self, title: str, description: str, error_msg: str) -> IssueAnalysis:
-        """Create a fallback analysis when Gemini API fails."""
+        """Create a fallback analysis when Claude API fails."""
         return IssueAnalysis(
             title=title,
             description=description,
@@ -290,3 +316,5 @@ Please analyze the issue and provide your response in the exact JSON format spec
             confidence_score=0.0,
             analysis_summary="Analysis failed - manual review needed"
         )
+
+
