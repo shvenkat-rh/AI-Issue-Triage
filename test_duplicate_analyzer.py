@@ -51,18 +51,18 @@ def test_duplicate_detection():
     # Check if API key is available
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        print("❌ ERROR: No Gemini API key found!")
+        print("ERROR: No Gemini API key found!")
         print("   Please set GEMINI_API_KEY or GOOGLE_API_KEY environment variable.")
         return
     
     try:
         # Initialize the analyzer
         analyzer = GeminiDuplicateAnalyzer(api_key=api_key)
-        print("✅ Duplicate analyzer initialized successfully")
+        print("Duplicate analyzer initialized successfully")
         
         # Create sample existing issues
         existing_issues = create_sample_issues()
-        print(f"📋 Created {len(existing_issues)} sample issues")
+        print(f"Created {len(existing_issues)} sample issues")
         
         # Test cases
         test_cases = [
@@ -93,7 +93,7 @@ def test_duplicate_detection():
         print("=" * 60)
         
         for i, test_case in enumerate(test_cases, 1):
-            print(f"\n🔍 Test {i}: {test_case['name']}")
+            print(f"\nTest {i}: {test_case['name']}")
             print("-" * 40)
             print(f"New Issue Title: {test_case['title']}")
             print(f"New Issue Description: {test_case['description'][:100]}...")
@@ -107,8 +107,8 @@ def test_duplicate_detection():
                 )
                 
                 # Display results
-                print(f"\n📊 RESULTS:")
-                print(f"   Is Duplicate: {'✅ YES' if result.is_duplicate else '❌ NO'}")
+                print(f"\nRESULTS:")
+                print(f"   Is Duplicate: {'YES' if result.is_duplicate else 'NO'}")
                 print(f"   Similarity Score: {result.similarity_score:.2f}")
                 print(f"   Confidence Score: {result.confidence_score:.2f}")
                 
@@ -122,7 +122,7 @@ def test_duplicate_detection():
                 print(f"   Recommendation: {result.recommendation}")
                 
             except Exception as e:
-                print(f"❌ Error in test {i}: {str(e)}")
+                print(f"ERROR in test {i}: {str(e)}")
         
         print("\n" + "=" * 60)
         print("TESTING BATCH DUPLICATE DETECTION")
@@ -144,21 +144,21 @@ def test_duplicate_detection():
             batch_results = analyzer.batch_detect_duplicates(new_issues, existing_issues)
             
             for i, (issue, result) in enumerate(zip(new_issues, batch_results), 1):
-                print(f"\n🔍 Batch Test {i}: {issue['title']}")
-                print(f"   Is Duplicate: {'✅ YES' if result.is_duplicate else '❌ NO'}")
+                print(f"\nBatch Test {i}: {issue['title']}")
+                print(f"   Is Duplicate: {'YES' if result.is_duplicate else 'NO'}")
                 print(f"   Similarity Score: {result.similarity_score:.2f}")
                 if result.duplicate_of:
                     print(f"   Duplicate of: {result.duplicate_of.issue_id}")
                     
         except Exception as e:
-            print(f"❌ Error in batch testing: {str(e)}")
+            print(f"ERROR in batch testing: {str(e)}")
         
         print("\n" + "=" * 60)
-        print("✅ ALL TESTS COMPLETED")
+        print("ALL TESTS COMPLETED")
         print("=" * 60)
         
     except Exception as e:
-        print(f"❌ Failed to initialize analyzer: {str(e)}")
+        print(f"ERROR: Failed to initialize analyzer: {str(e)}")
 
 def test_edge_cases():
     """Test edge cases for the duplicate analyzer."""
@@ -168,14 +168,14 @@ def test_edge_cases():
     
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        print("❌ No API key available for edge case testing")
+        print("ERROR: No API key available for edge case testing")
         return
     
     try:
         analyzer = GeminiDuplicateAnalyzer(api_key=api_key)
         
         # Test with empty issues list
-        print("\n🔍 Testing with no existing issues...")
+        print("\nTesting with no existing issues...")
         result = analyzer.detect_duplicate(
             "New issue title",
             "New issue description",
@@ -185,7 +185,7 @@ def test_edge_cases():
         print(f"   Recommendation: {result.recommendation}")
         
         # Test with only closed issues
-        print("\n🔍 Testing with only closed issues...")
+        print("\nTesting with only closed issues...")
         closed_issues = [
             IssueReference(
                 issue_id="CLOSED-001",
@@ -205,7 +205,7 @@ def test_edge_cases():
         print(f"   Recommendation: {result.recommendation}")
         
     except Exception as e:
-        print(f"❌ Error in edge case testing: {str(e)}")
+        print(f"ERROR in edge case testing: {str(e)}")
 
 if __name__ == "__main__":
     test_duplicate_detection()

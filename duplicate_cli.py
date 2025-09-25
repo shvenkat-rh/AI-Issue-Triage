@@ -18,19 +18,77 @@ def load_issues_from_file(file_path: str) -> List[IssueReference]:
             data = json.load(f)
         
         issues = []
-        for item in data:
-            issues.append(IssueReference(**item))
+        for i, item in enumerate(data):
+            try:
+                # Handle different JSON formats
+                issue = normalize_issue_data(item)
+                issues.append(IssueReference(**issue))
+            except Exception as e:
+                print(f"ERROR: Error processing issue {i+1}: {e}")
+                print(f"   Issue data: {item}")
+                print(f"   Expected format: {{'issue_id': 'str', 'title': 'str', 'description': 'str', 'status': 'str'}}")
+                sys.exit(1)
         
         return issues
     except FileNotFoundError:
-        print(f"❌ Error: File '{file_path}' not found.")
+        print(f"ERROR: File '{file_path}' not found.")
         sys.exit(1)
     except json.JSONDecodeError as e:
-        print(f"❌ Error: Invalid JSON in file '{file_path}': {e}")
+        print(f"ERROR: Invalid JSON in file '{file_path}': {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Error loading issues: {e}")
+        print(f"ERROR: Error loading issues file: {e}")
         sys.exit(1)
+
+
+def normalize_issue_data(item: dict) -> dict:
+    """Normalize issue data from different formats to IssueReference format."""
+    normalized = {}
+    
+    # Handle issue_id field (could be 'id', 'number', 'issue_id', etc.)
+    if 'issue_id' in item:
+        normalized['issue_id'] = str(item['issue_id'])
+    elif 'id' in item:
+        normalized['issue_id'] = str(item['id'])
+    elif 'number' in item:
+        normalized['issue_id'] = str(item['number'])
+    else:
+        raise ValueError("Missing required field: issue_id (or 'id', 'number')")
+    
+    # Handle title
+    if 'title' in item:
+        normalized['title'] = str(item['title'])
+    else:
+        raise ValueError("Missing required field: title")
+    
+    # Handle description (could be 'body', 'description', etc.)
+    if 'description' in item:
+        normalized['description'] = str(item['description'])
+    elif 'body' in item:
+        normalized['description'] = str(item['body']) if item['body'] else "No description provided"
+    else:
+        normalized['description'] = "No description provided"
+    
+    # Handle status (could be 'state', 'status', etc.)
+    if 'status' in item:
+        normalized['status'] = str(item['status']).lower()
+    elif 'state' in item:
+        normalized['status'] = str(item['state']).lower()
+    else:
+        normalized['status'] = "open"  # Default to open
+    
+    # Handle optional fields
+    if 'created_date' in item:
+        normalized['created_date'] = str(item['created_date'])
+    elif 'created_at' in item:
+        normalized['created_date'] = str(item['created_at'])
+    
+    if 'url' in item:
+        normalized['url'] = str(item['url'])
+    elif 'html_url' in item:
+        normalized['url'] = str(item['html_url'])
+    
+    return normalized
 
 
 def create_sample_issues_file(file_path: str):
@@ -65,7 +123,53 @@ def create_sample_issues_file(file_path: str):
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(sample_issues, f, indent=2)
     
-    print(f"✅ Sample issues file created: {file_path}")
+    print(f"Sample issues file created: {file_path}")
+
+
+def validate_issues_file(file_path: str):
+    """Validate and display information about an issues JSON file."""
+    try:
+        print(f"Validating issues file: {file_path}")
+        print("=" * 50)
+        
+        # Load and validate the file
+        issues = load_issues_from_file(file_path)
+        
+        print(f"Successfully loaded {len(issues)} issues")
+        print()
+        
+        # Show statistics
+        statuses = {}
+        for issue in issues:
+            status = issue.status
+            statuses[status] = statuses.get(status, 0) + 1
+        
+        print("Issue Status Distribution:")
+        for status, count in statuses.items():
+            print(f"   {status}: {count}")
+        
+        print()
+        print("Sample Issues:")
+        for i, issue in enumerate(issues[:3], 1):  # Show first 3 issues
+            print(f"   {i}. {issue.issue_id}: {issue.title}")
+            print(f"      Status: {issue.status}")
+            print(f"      Description: {issue.description[:100]}{'...' if len(issue.description) > 100 else ''}")
+            if issue.url:
+                print(f"      URL: {issue.url}")
+            print()
+        
+        if len(issues) > 3:
+            print(f"   ... and {len(issues) - 3} more issues")
+        
+        # Show open issues count (these are used for duplicate detection)
+        open_issues = [issue for issue in issues if issue.status.lower() == 'open']
+        print(f"Open issues (used for duplicate detection): {len(open_issues)}")
+        
+    except SystemExit:
+        # Re-raise system exit from load_issues_from_file
+        raise
+    except Exception as e:
+        print(f"ERROR: Validation failed: {e}")
 
 
 def main():
@@ -81,8 +185,22 @@ Examples:
   # Create a sample issues file
   python duplicate_cli.py --create-sample issues.json
   
+  # Validate an existing issues file
+  python duplicate_cli.py --validate-issues issues.json
+  
   # Interactive mode
   python duplicate_cli.py --interactive --issues issues.json
+
+Supported JSON formats:
+  The tool accepts various JSON formats including GitHub API responses.
+  Required fields: title, and either (issue_id OR id OR number)
+  Optional fields: description/body, status/state, created_date/created_at, url/html_url
+  
+  Example GitHub format:
+  [{"number": 1, "title": "Bug", "body": "Description", "state": "open"}]
+  
+  Example standard format:
+  [{"issue_id": "1", "title": "Bug", "description": "Description", "status": "open"}]
         """
     )
     
@@ -105,6 +223,12 @@ Examples:
         '--create-sample', 
         metavar='FILE',
         help='Create a sample issues JSON file at the specified path'
+    )
+    
+    parser.add_argument(
+        '--validate-issues', 
+        metavar='FILE',
+        help='Validate and show the format of an issues JSON file'
     )
     
     parser.add_argument(
@@ -132,6 +256,11 @@ Examples:
         create_sample_issues_file(args.create_sample)
         return
     
+    # Validate issues file if requested
+    if args.validate_issues:
+        validate_issues_file(args.validate_issues)
+        return
+    
     # Interactive mode
     if args.interactive:
         run_interactive_mode(args.issues, args.api_key)
@@ -153,10 +282,10 @@ def run_duplicate_detection(args):
         
         # Load existing issues
         existing_issues = load_issues_from_file(args.issues)
-        print(f"📋 Loaded {len(existing_issues)} existing issues")
+        print(f"Loaded {len(existing_issues)} existing issues")
         
         # Perform duplicate detection
-        print(f"🔍 Checking for duplicates...")
+        print(f"Checking for duplicates...")
         result = analyzer.detect_duplicate(
             args.title,
             args.description,
@@ -170,14 +299,14 @@ def run_duplicate_detection(args):
             output_text(result, args.title)
             
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"ERROR: {e}")
         sys.exit(1)
 
 
 def run_interactive_mode(issues_file: str, api_key: str):
     """Run the analyzer in interactive mode."""
     if not issues_file:
-        print("❌ Error: --issues file is required for interactive mode")
+        print("ERROR: --issues file is required for interactive mode")
         sys.exit(1)
     
     try:
@@ -186,7 +315,7 @@ def run_interactive_mode(issues_file: str, api_key: str):
         
         # Load existing issues
         existing_issues = load_issues_from_file(issues_file)
-        print(f"📋 Loaded {len(existing_issues)} existing issues")
+        print(f"Loaded {len(existing_issues)} existing issues")
         
         print("\n" + "=" * 60)
         print("GEMINI DUPLICATE ISSUE ANALYZER - Interactive Mode")
@@ -200,48 +329,48 @@ def run_interactive_mode(issues_file: str, api_key: str):
                 title = input("Enter issue title: ").strip()
                 
                 if title.lower() in ['quit', 'exit']:
-                    print("👋 Goodbye!")
+                    print("Goodbye!")
                     break
                 
                 if not title:
-                    print("❌ Title cannot be empty")
+                    print("ERROR: Title cannot be empty")
                     continue
                 
                 description = input("Enter issue description: ").strip()
                 
                 if not description:
-                    print("❌ Description cannot be empty")
+                    print("ERROR: Description cannot be empty")
                     continue
                 
                 # Perform duplicate detection
-                print("\n🔍 Analyzing for duplicates...")
+                print("\nAnalyzing for duplicates...")
                 result = analyzer.detect_duplicate(title, description, existing_issues)
                 
                 # Display results
                 output_text(result, title)
                 
             except KeyboardInterrupt:
-                print("\n👋 Goodbye!")
+                print("\nGoodbye!")
                 break
             except Exception as e:
-                print(f"❌ Error: {e}")
+                print(f"ERROR: {e}")
                 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"ERROR: {e}")
         sys.exit(1)
 
 
 def output_text(result, title: str):
     """Output results in text format."""
-    print(f"\n📊 DUPLICATE DETECTION RESULTS")
+    print(f"\nDUPLICATE DETECTION RESULTS")
     print("=" * 50)
     print(f"Issue Title: {title}")
-    print(f"Is Duplicate: {'✅ YES' if result.is_duplicate else '❌ NO'}")
+    print(f"Is Duplicate: {'YES' if result.is_duplicate else 'NO'}")
     print(f"Similarity Score: {result.similarity_score:.2f}")
     print(f"Confidence Score: {result.confidence_score:.2f}")
     
     if result.is_duplicate and result.duplicate_of:
-        print(f"\n🔗 DUPLICATE OF:")
+        print(f"\nDUPLICATE OF:")
         print(f"   ID: {result.duplicate_of.issue_id}")
         print(f"   Title: {result.duplicate_of.title}")
         print(f"   Status: {result.duplicate_of.status}")
@@ -249,11 +378,11 @@ def output_text(result, title: str):
             print(f"   URL: {result.duplicate_of.url}")
     
     if result.similarity_reasons:
-        print(f"\n📝 SIMILARITY REASONS:")
+        print(f"\nSIMILARITY REASONS:")
         for reason in result.similarity_reasons:
             print(f"   • {reason}")
     
-    print(f"\n💡 RECOMMENDATION:")
+    print(f"\nRECOMMENDATION:")
     print(f"   {result.recommendation}")
 
 
