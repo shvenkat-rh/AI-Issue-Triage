@@ -54,3 +54,23 @@ class IssueAnalysis(BaseModel):
     proposed_solutions: List[CodeSolution] = Field(description="Proposed solutions")
     confidence_score: float = Field(description="Confidence in the analysis (0-1)", ge=0, le=1)
     analysis_summary: str = Field(description="Summary of the analysis")
+
+
+class IssueReference(BaseModel):
+    """Reference to an existing issue."""
+    issue_id: str = Field(description="Unique identifier for the issue")
+    title: str = Field(description="Issue title")
+    description: str = Field(description="Issue description")
+    status: str = Field(description="Current status of the issue (e.g., 'open', 'closed', 'in_progress')")
+    created_date: Optional[str] = Field(None, description="When the issue was created")
+    url: Optional[str] = Field(None, description="URL to the issue if available")
+
+
+class DuplicateDetectionResult(BaseModel):
+    """Result of duplicate issue detection."""
+    is_duplicate: bool = Field(description="Whether the issue is a duplicate")
+    duplicate_of: Optional[IssueReference] = Field(None, description="Reference to the original issue if duplicate")
+    similarity_score: float = Field(description="Similarity score (0-1)", ge=0, le=1)
+    similarity_reasons: List[str] = Field(description="Reasons why issues are considered similar")
+    confidence_score: float = Field(description="Confidence in the duplicate detection (0-1)", ge=0, le=1)
+    recommendation: str = Field(description="Recommendation for handling the duplicate")
