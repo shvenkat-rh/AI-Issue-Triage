@@ -282,10 +282,12 @@ def run_duplicate_detection(args):
         
         # Load existing issues
         existing_issues = load_issues_from_file(args.issues)
-        print(f"Loaded {len(existing_issues)} existing issues")
+        if args.output != 'json':
+            print(f"Loaded {len(existing_issues)} existing issues")
         
         # Perform duplicate detection
-        print(f"Checking for duplicates...")
+        if args.output != 'json':
+            print(f"Checking for duplicates...")
         result = analyzer.detect_duplicate(
             args.title,
             args.description,
@@ -299,7 +301,21 @@ def run_duplicate_detection(args):
             output_text(result, args.title)
             
     except Exception as e:
-        print(f"ERROR: {e}")
+        if args.output == 'json':
+            # For JSON output, return error as JSON
+            error_output = {
+                "error": str(e),
+                "is_duplicate": False,
+                "similarity_score": 0.0,
+                "confidence_score": 0.0,
+                "similarity_reasons": [],
+                "recommendation": f"Analysis failed: {str(e)}",
+                "duplicate_of": None,
+                "timestamp": datetime.now().isoformat()
+            }
+            print(json.dumps(error_output, indent=2))
+        else:
+            print(f"ERROR: {e}")
         sys.exit(1)
 
 
