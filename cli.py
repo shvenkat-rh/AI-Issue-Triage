@@ -26,7 +26,17 @@ OUTPUT OPTIONS:
 
 BEHAVIOR OPTIONS:
   --quiet, -q                  Suppress progress messages, only show results
+  --no-clean                   Disable data cleaning (preserve raw input including
+                               secrets, emails, IPs)
   --version                    Show version information and exit
+
+DATA CLEANING:
+  By default, the tool automatically cleans input data to:
+  - Strip extra whitespace and normalize formatting
+  - Mask sensitive information like API keys, tokens, passwords
+  - Mask email addresses (e.g., user@domain.com → u***r@domain.com)  
+  - Mask IP addresses (both IPv4 and IPv6)
+  Use --no-clean to disable this behavior and preserve raw input.
 
 USAGE MODES:
   1. Interactive Mode: Run without arguments to enter interactive input mode
@@ -49,6 +59,7 @@ ENVIRONMENT VARIABLES:
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -56,6 +67,176 @@ from typing import Optional
 
 from gemini_analyzer import GeminiIssueAnalyzer
 from models import IssueType, Severity
+
+
+def clean_text(text: str) -> str:
+    """Clean and normalize text by removing extra whitespace and normalizing format.
+    
+    Args:
+        text: The text to clean
+        
+    Returns:
+        Cleaned text with normalized whitespace
+    """
+    if not text:
+        return text
+    
+    # Remove leading/trailing whitespace
+    text = text.strip()
+    
+    # Replace multiple spaces with single space
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Replace multiple newlines with double newline (preserve paragraph breaks)
+    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+    
+    # Clean up mixed whitespace (tabs, spaces, etc.)
+    text = re.sub(r'[ \t]+', ' ', text)
+    
+    return text
+
+
+def mask_secrets(text: str) -> str:
+    """Mask common secrets like API keys, tokens, passwords, etc.
+    
+    Args:
+        text: The text to process
+        
+    Returns:
+        Text with secrets masked
+    """
+    if not text:
+        return text
+    
+    # Common secret patterns (ordered from most specific to least specific)
+    patterns = [
+        # JWT tokens (most specific - must come before general token patterns)
+        (r'\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b', r'[MASKED_JWT_TOKEN]'),
+        
+        # OpenAI API keys (specific format)
+        (r'\bsk-[a-zA-Z0-9]{48}\b', r'[MASKED_OPENAI_KEY]'),
+        
+        # GitHub tokens (specific format)
+        (r'\bgh[ps]_[a-zA-Z0-9_]{36,}\b', r'[MASKED_GITHUB_TOKEN]'),
+        
+        # AWS keys (specific format)
+        (r'\bAKIA[0-9A-Z]{16}\b', r'[MASKED_AWS_ACCESS_KEY]'),
+        (r'(aws_secret_access_key[_-]?[=:\s]*["\']?)([a-zA-Z0-9/+=]{40})["\']?', r'\1[MASKED_AWS_SECRET]'),
+        
+        # Database connection strings
+        (r'(mongodb://[^:]+:)([^@]+)(@)', r'\1[MASKED_DB_PASSWORD]\3'),
+        (r'(mysql://[^:]+:)([^@]+)(@)', r'\1[MASKED_DB_PASSWORD]\3'),
+        (r'(postgres://[^:]+:)([^@]+)(@)', r'\1[MASKED_DB_PASSWORD]\3'),
+        
+        # API Keys (various formats)
+        (r'(api[_-]?key[_-]?[=:\s]*["\']?)([a-zA-Z0-9_-]{20,})["\']?', r'\1[MASKED_API_KEY]'),
+        (r'(key[_-]?[=:\s]*["\']?)([a-zA-Z0-9_-]{32,})["\']?', r'\1[MASKED_KEY]'),
+        
+        # Tokens (broader patterns - after specific ones)
+        (r'(access[_-]?token[_-]?[=:\s]*["\']?)([a-zA-Z0-9_.\-/+=]{20,})["\']?', r'\1[MASKED_ACCESS_TOKEN]'),
+        (r'(bearer[_-]?[=:\s]*["\']?)([a-zA-Z0-9_.\-/+=]{20,})["\']?', r'\1[MASKED_BEARER_TOKEN]'),
+        (r'(token[_-]?[=:\s]*["\']?)([a-zA-Z0-9_.\-/+=]{20,})["\']?', r'\1[MASKED_TOKEN]'),
+        
+        # Passwords
+        (r'(password[_-]?[=:\s]*["\']?)([^\s"\']{8,})["\']?', r'\1[MASKED_PASSWORD]'),
+        (r'(pass[_-]?[=:\s]*["\']?)([^\s"\']{8,})["\']?', r'\1[MASKED_PASSWORD]'),
+        (r'(pwd[_-]?[=:\s]*["\']?)([^\s"\']{8,})["\']?', r'\1[MASKED_PASSWORD]'),
+        
+        # Generic secrets (long alphanumeric strings that look like secrets)
+        (r'(secret[_-]?[=:\s]*["\']?)([a-zA-Z0-9_-]{24,})["\']?', r'\1[MASKED_SECRET]'),
+    ]
+    
+    for pattern, replacement in patterns:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    
+    return text
+
+
+def mask_emails(text: str) -> str:
+    """Mask email addresses in text.
+    
+    Args:
+        text: The text to process
+        
+    Returns:
+        Text with email addresses masked
+    """
+    if not text:
+        return text
+    
+    # Email pattern - matches most common email formats
+    email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+    
+    def mask_email(match):
+        email = match.group(0)
+        parts = email.split('@')
+        if len(parts) == 2:
+            username, domain = parts
+            # Keep first and last character of username if long enough
+            if len(username) > 2:
+                masked_username = username[0] + '*' * (len(username) - 2) + username[-1]
+            else:
+                masked_username = '*' * len(username)
+            
+            # Keep domain as is or mask it too based on preference
+            # For now, keeping domain visible for context
+            return f"{masked_username}@{domain}"
+        return "[MASKED_EMAIL]"
+    
+    return re.sub(email_pattern, mask_email, text)
+
+
+def mask_ip_addresses(text: str) -> str:
+    """Mask IP addresses in text.
+    
+    Args:
+        text: The text to process
+        
+    Returns:
+        Text with IP addresses masked
+    """
+    if not text:
+        return text
+    
+    # IPv4 pattern
+    ipv4_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+    
+    # IPv6 pattern (simplified)
+    ipv6_pattern = r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b'
+    
+    # Replace IPv4 addresses
+    text = re.sub(ipv4_pattern, '[MASKED_IPv4]', text)
+    
+    # Replace IPv6 addresses
+    text = re.sub(ipv6_pattern, '[MASKED_IPv6]', text)
+    
+    return text
+
+
+def clean_issue_data(title: str, description: str) -> tuple[str, str]:
+    """Clean and sanitize issue title and description.
+    
+    Args:
+        title: The issue title
+        description: The issue description
+        
+    Returns:
+        Tuple of (cleaned_title, cleaned_description)
+    """
+    # Clean and normalize text
+    cleaned_title = clean_text(title) if title else ""
+    cleaned_description = clean_text(description) if description else ""
+    
+    # Mask sensitive information
+    cleaned_title = mask_secrets(cleaned_title)
+    cleaned_title = mask_emails(cleaned_title)
+    cleaned_title = mask_ip_addresses(cleaned_title)
+    
+    cleaned_description = mask_secrets(cleaned_description)
+    cleaned_description = mask_emails(cleaned_description)
+    cleaned_description = mask_ip_addresses(cleaned_description)
+    
+    return cleaned_title, cleaned_description
 
 
 def format_analysis_text(analysis) -> str:
@@ -182,6 +363,9 @@ Examples:
 
   # JSON output
   python cli.py --title "Bug" --description "Description" --format json
+
+  # Disable data cleaning (preserve raw input)
+  python cli.py --title "API key issue" --description "My key abc123..." --no-clean
         """
     )
     
@@ -248,6 +432,12 @@ Examples:
     )
     
     parser.add_argument(
+        "--no-clean",
+        action="store_true",
+        help="Disable data cleaning (preserve raw input including secrets, emails, IPs)"
+    )
+    
+    parser.add_argument(
         "--version",
         action="version",
         version="Gemini Issue Analyzer 1.0.0"
@@ -269,6 +459,10 @@ Examples:
             lines = content.split('\n', 1)
             title = lines[0].strip()
             description = lines[1].strip() if len(lines) > 1 else ""
+            
+            # Clean the data from file
+            if not args.no_clean:
+                title, description = clean_issue_data(title, description)
         except Exception as e:
             print(f"Error reading file: {e}", file=sys.stderr)
             sys.exit(1)
@@ -276,6 +470,10 @@ Examples:
     elif args.title and args.description:
         title = args.title
         description = args.description
+        
+        # Clean the data from command line arguments
+        if not args.no_clean:
+            title, description = clean_issue_data(title, description)
     
     elif args.title or args.description:
         print("Error: Both --title and --description are required when not using --file", file=sys.stderr)
@@ -306,6 +504,10 @@ Examples:
             if not description:
                 print("Error: Description cannot be empty", file=sys.stderr)
                 sys.exit(1)
+            
+            # Clean the data from interactive input
+            if not args.no_clean:
+                title, description = clean_issue_data(title, description)
                 
         except KeyboardInterrupt:
             print("\nAborted by user", file=sys.stderr)
