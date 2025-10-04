@@ -13,8 +13,23 @@ from models import InjectionRisk, InjectionResult
 try:
     import pytector
     PYTECTOR_AVAILABLE = True
+    
+    # Test the API to see what methods are available - suppress output
+    try:
+        import os
+        from contextlib import redirect_stdout, redirect_stderr
+        
+        with open(os.devnull, 'w') as devnull:
+            with redirect_stdout(devnull), redirect_stderr(devnull):
+                test_detector = pytector.PromptInjectionDetector()
+                PYTECTOR_API_VERSION = "v2" if hasattr(test_detector, 'detect_injection') else "v1"
+                del test_detector  # Clean up
+    except Exception:
+        PYTECTOR_API_VERSION = "unknown"
+        
 except ImportError:
     PYTECTOR_AVAILABLE = False
+    PYTECTOR_API_VERSION = "none"
     logging.warning("pytector library not available. Prompt injection detection will be limited.")
 
 
@@ -32,7 +47,14 @@ class PromptInjectionDetector:
         
         if PYTECTOR_AVAILABLE:
             try:
-                self.pytector_detector = pytector.PromptInjectionDetector()
+                # Suppress stdout/stderr during initialization to avoid model loading messages
+                import sys
+                import os
+                from contextlib import redirect_stdout, redirect_stderr
+                
+                with open(os.devnull, 'w') as devnull:
+                    with redirect_stdout(devnull), redirect_stderr(devnull):
+                        self.pytector_detector = pytector.PromptInjectionDetector()
                 logging.info("Pytector detector initialized successfully")
             except Exception as e:
                 logging.error(f"Failed to initialize pytector detector: {e}")
@@ -153,14 +175,31 @@ class PromptInjectionDetector:
             )
         
         try:
-            result = self.pytector_detector.detect(text)
-            confidence = getattr(result, 'confidence', 0.8 if result.is_unsafe else 0.0)
+            # Suppress stdout/stderr during pytector execution to avoid contaminating JSON output
+            import sys
+            import os
+            from contextlib import redirect_stdout, redirect_stderr
+            
+            with open(os.devnull, 'w') as devnull:
+                with redirect_stdout(devnull), redirect_stderr(devnull):
+                    # Use the correct API method
+                    result = self.pytector_detector.detect_injection(text)
+            
+            # Extract results - pytector returns a tuple (is_injection, confidence)
+            if isinstance(result, tuple) and len(result) >= 2:
+                is_unsafe, confidence = result[0], result[1]
+            elif isinstance(result, dict):
+                is_unsafe = result.get('injection', False)
+                confidence = result.get('confidence', 0.8 if is_unsafe else 0.0)
+            else:
+                is_unsafe = bool(result)
+                confidence = 0.8 if is_unsafe else 0.0
             
             return InjectionResult(
-                is_injection=result.is_unsafe,
-                risk_level=InjectionRisk.HIGH if result.is_unsafe else InjectionRisk.SAFE,
+                is_injection=is_unsafe,
+                risk_level=InjectionRisk.HIGH if is_unsafe else InjectionRisk.SAFE,
                 confidence_score=confidence,
-                detected_patterns=["pytector_detection"] if result.is_unsafe else [],
+                detected_patterns=["pytector_detection"] if is_unsafe else [],
                 details="Pytector detection"
             )
         except Exception as e:
@@ -341,44 +380,80 @@ if __name__ == "__main__":
     
     # Check if we have command line arguments for CLI usage
     if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
-        # Simple CLI usage: python prompt_injection.py "title" "description"
+        # Simple CLI usage: python prompt_injection.py "title" "description" [--debug]
+        debug_mode = '--debug' in sys.argv
+        
         if len(sys.argv) >= 3:
             title = sys.argv[1]
             description = sys.argv[2]
             
-            # Run detection without debug output for CI
-            title_result = detect_prompt_injection(title) if title else None
-            desc_result = detect_prompt_injection(description) if description else None
+            if not debug_mode:
+                # Suppress all logging and warnings for clean JSON output in CI
+                import logging
+                import warnings
+                logging.disable(logging.CRITICAL)
+                warnings.filterwarnings("ignore")
+            else:
+                # Debug mode - show diagnostic information
+                print(f"DEBUG: Pytector available: {PYTECTOR_AVAILABLE}", file=sys.stderr)
+                print(f"DEBUG: Pytector API version: {PYTECTOR_API_VERSION}", file=sys.stderr)
+                print(f"DEBUG: Title: {repr(title)}", file=sys.stderr)
+                print(f"DEBUG: Description: {repr(description)}", file=sys.stderr)
             
-            # Determine if either has injection
-            has_injection = False
-            risk_level = 'safe'
-            confidence = 0.0
-            detected_patterns = []
-            
-            if title_result and title_result.is_injection:
-                has_injection = True
-                risk_level = title_result.risk_level.value
-                confidence = max(confidence, title_result.confidence_score)
-                if title_result.detected_patterns:
-                    detected_patterns.extend(title_result.detected_patterns)
-            
-            if desc_result and desc_result.is_injection:
-                has_injection = True
-                risk_level = desc_result.risk_level.value
-                confidence = max(confidence, desc_result.confidence_score)
-                if desc_result.detected_patterns:
-                    detected_patterns.extend(desc_result.detected_patterns)
-            
-            result = {
-                'has_prompt_injection': has_injection,
-                'risk_level': risk_level,
-                'confidence_score': confidence,
-                'detected_patterns': detected_patterns[:3]  # Limit to first 3 patterns
-            }
-            
-            print(json.dumps(result, indent=2))
-            sys.exit(0)
+            try:
+                # Run detection without debug output for CI
+                title_result = detect_prompt_injection(title) if title else None
+                desc_result = detect_prompt_injection(description) if description else None
+                
+                # Determine if either has injection
+                has_injection = False
+                risk_level = 'safe'
+                confidence = 0.0
+                detected_patterns = []
+                
+                if title_result and title_result.is_injection:
+                    has_injection = True
+                    risk_level = title_result.risk_level.value
+                    confidence = max(confidence, title_result.confidence_score)
+                    if title_result.detected_patterns:
+                        detected_patterns.extend(title_result.detected_patterns)
+                
+                if desc_result and desc_result.is_injection:
+                    has_injection = True
+                    risk_level = desc_result.risk_level.value
+                    confidence = max(confidence, desc_result.confidence_score)
+                    if desc_result.detected_patterns:
+                        detected_patterns.extend(desc_result.detected_patterns)
+                
+                result = {
+                    'has_prompt_injection': has_injection,
+                    'risk_level': risk_level,
+                    'confidence_score': confidence,
+                    'detected_patterns': detected_patterns[:3]  # Limit to first 3 patterns
+                }
+                
+                if debug_mode:
+                    print(f"DEBUG: Final result: {result}", file=sys.stderr)
+                
+                print(json.dumps(result, indent=2))
+                sys.exit(0)
+                
+            except Exception as e:
+                error_result = {
+                    'has_prompt_injection': False,
+                    'risk_level': 'safe',
+                    'confidence_score': 0.0,
+                    'detected_patterns': [],
+                    'error': str(e)
+                }
+                
+                if debug_mode:
+                    print(f"DEBUG: Error occurred: {e}", file=sys.stderr)
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+                
+                print(json.dumps(error_result, indent=2))
+                sys.exit(1)
         else:
             print("Usage: python prompt_injection.py <title> <description>", file=sys.stderr)
             sys.exit(1)
