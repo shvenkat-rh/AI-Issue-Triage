@@ -45,11 +45,13 @@ class PromptInjectionDetector:
         """Get common prompt injection patterns."""
         return {
             "role_manipulation": [
-                r"(?i)\b(ignore|forget|disregard)\s+(previous|above|earlier|prior|all)\s+(instructions?|prompts?|rules?|commands?)",
+                r"(?i)\b(ignore|forget|disregard|dismiss)\s+(previous|above|earlier|prior|all|the)\s+(instructions?|prompts?|rules?|commands?)",
+                r"(?i)\b(forget\s+all\s+previous|ignore\s+all\s+previous|disregard\s+all\s+previous)",
                 r"(?i)\b(you\s+are\s+now|from\s+now\s+on|instead)\s+.{0,50}\b(assistant|ai|bot|system)",
                 r"(?i)\b(act\s+as|pretend\s+to\s+be|roleplay\s+as)\s+.{0,30}\b(admin|root|developer|engineer)",
                 r"(?i)\b(new\s+instructions?|override\s+instructions?|updated\s+instructions?)",
                 r"(?i)\b(ignore\s+all\s+previous)",
+                r"(?i)\b(forget\s+everything|ignore\s+everything|disregard\s+everything)",
             ],
             "system_prompts": [
                 r"(?i)\b(system\s*:|assistant\s*:|human\s*:|user\s*:)",
@@ -64,9 +66,11 @@ class PromptInjectionDetector:
                 r"(?i)\b(unrestricted|unlimited|no\s+restrictions?|without\s+limits?)",
             ],
             "file_manipulation": [
-                r"(?i)\b(create|write|save|generate)\s+.{0,30}\b(file|document)",
+                r"(?i)\b(create|write|save|generate|make)\s+.{0,30}\b(file|document|script)",
                 r"(?i)\b(create\s+a\s+new\s+file)",
                 r"(?i)\b(write\s+to\s+file|save\s+to\s+file)",
+                r"(?i)\b(create\s+.{0,30}\.txt|create\s+.{0,30}\.py|create\s+.{0,30}\.js)",
+                r"(?i)\b(file\s+called|named\s+.{0,30}\.(txt|py|js|sh|bat))",
             ],
             "code_injection": [
                 r"(?i)<script[^>]*>.*?</script>",
@@ -186,6 +190,7 @@ class PromptInjectionDetector:
                             "role_manipulation": 0.9,
                             "system_prompts": 0.8,
                             "instruction_bypass": 0.95,
+                            "file_manipulation": 0.75,  # Increased from default
                             "code_injection": 0.85,
                             "data_extraction": 0.8,
                             "prompt_leakage": 0.9
