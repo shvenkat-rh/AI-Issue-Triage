@@ -45,10 +45,11 @@ class PromptInjectionDetector:
         """Get common prompt injection patterns."""
         return {
             "role_manipulation": [
-                r"(?i)\b(ignore|forget|disregard)\s+(previous|above|earlier|prior)\s+(instructions?|prompts?|rules?|commands?)",
+                r"(?i)\b(ignore|forget|disregard)\s+(previous|above|earlier|prior|all)\s+(instructions?|prompts?|rules?|commands?)",
                 r"(?i)\b(you\s+are\s+now|from\s+now\s+on|instead)\s+.{0,50}\b(assistant|ai|bot|system)",
                 r"(?i)\b(act\s+as|pretend\s+to\s+be|roleplay\s+as)\s+.{0,30}\b(admin|root|developer|engineer)",
                 r"(?i)\b(new\s+instructions?|override\s+instructions?|updated\s+instructions?)",
+                r"(?i)\b(ignore\s+all\s+previous)",
             ],
             "system_prompts": [
                 r"(?i)\b(system\s*:|assistant\s*:|human\s*:|user\s*:)",
@@ -61,6 +62,11 @@ class PromptInjectionDetector:
                 r"(?i)\b(jailbreak|prompt\s+injection|adversarial\s+prompt)",
                 r"(?i)\b(disable|turn\s+off|deactivate)\s+.{0,30}\b(safety|filter|guard|protection)",
                 r"(?i)\b(unrestricted|unlimited|no\s+restrictions?|without\s+limits?)",
+            ],
+            "file_manipulation": [
+                r"(?i)\b(create|write|save|generate)\s+.{0,30}\b(file|document)",
+                r"(?i)\b(create\s+a\s+new\s+file)",
+                r"(?i)\b(write\s+to\s+file|save\s+to\s+file)",
             ],
             "code_injection": [
                 r"(?i)<script[^>]*>.*?</script>",
