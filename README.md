@@ -13,6 +13,9 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 - **Export Capabilities**: Export analysis results in JSON format
 - **Enhanced Performance**: Faster analysis with the latest Gemini 2.0 Flash model
 - **Smart Retry Mechanism**: Automatically retries analysis if low-quality responses are detected
+- **Security Protection**: Built-in prompt injection detection to protect against malicious inputs
+- **Duplicate Detection**: Automatically identifies and flags duplicate issues
+- **GitHub Actions Integration**: Automated issue analysis workflow for GitHub repositories
 
 ## Setup
 
@@ -52,7 +55,79 @@ repomix --output repomix-output.txt
 
 ## Usage
 
-### Web Interface
+The AI Issue Triage system can be used in three main ways:
+
+### 1. GitHub Actions Workflow (Automated)
+
+The most powerful way to use this system is through the automated GitHub Actions workflow, which provides continuous issue analysis for your repository.
+
+#### Setup for GitHub Actions
+
+1. **Add the workflow file** to your repository at `.github/workflows/gemini-issue-analysis.yml`
+2. **Configure repository secrets**:
+   - Go to your repository Settings → Secrets and variables → Actions
+   - Add `GEMINI_API_KEY` with your Google Gemini API key
+3. **Enable workflow permissions**:
+   - Go to Settings → Actions → General
+   - Set "Workflow permissions" to "Read and write permissions"
+
+#### How It Works
+
+When a new issue is opened in your repository, the workflow automatically:
+
+1. **Security Check**: Scans for prompt injection attempts to protect the AI system
+2. **Duplicate Detection**: Compares against existing issues to identify duplicates
+3. **AI Analysis**: Performs comprehensive issue analysis using your codebase
+4. **Auto-Labeling**: Adds appropriate labels based on issue type and severity
+5. **Comment Generation**: Posts detailed analysis results as issue comments
+
+#### Workflow Features
+
+- **Security Protection**: Automatically detects and flags malicious prompt injection attempts
+- **Duplicate Detection**: Identifies similar issues and prevents redundant analysis
+- **Smart Labeling**: Adds labels like `type:bug`, `severity:high`, `gemini-analyzed`
+- **Detailed Comments**: Posts comprehensive analysis directly to GitHub issues
+- **Artifact Storage**: Saves analysis results and debug logs for review
+- **Fast Processing**: Uses latest Gemini 2.0 Flash model for quick analysis
+
+#### Workflow Configuration
+
+The GitHub Actions workflow (`gemini-issue-analysis.yml`) can be customized for your needs:
+
+```yaml
+# Example workflow configuration
+name: AI Issue Analysis
+
+on:
+  issues:
+    types: [opened]  # Trigger on new issues
+
+jobs:
+  analyze-issue:
+    runs-on: ubuntu-latest
+    steps:
+      # ... automated analysis steps
+```
+
+**Key Configuration Options:**
+- **Trigger Events**: Modify `on.issues.types` to include `edited`, `reopened`, etc.
+- **Repository Source**: Change the AI-Issue-Triage repository reference if using a fork
+- **Node.js Version**: Adjust Node.js version for repomix compatibility
+- **Python Version**: Modify Python version based on your requirements
+- **Artifact Retention**: Adjust how long analysis artifacts are stored
+
+#### Workflow Artifacts
+
+The workflow generates several artifacts for debugging and audit purposes:
+
+- **`prompt_injection_result.json`**: Security scan results
+- **`prompt_injection_debug.log`**: Debug information for security checks
+- **`duplicate_result.json`**: Duplicate detection results
+- **`analysis_result.json`**: Complete AI analysis in JSON format
+- **`analysis_result.txt`**: Human-readable analysis results
+- **`repomix-output.txt`**: Generated codebase content
+
+### 2. Web Interface (Interactive)
 
 ```bash
 streamlit run app.py
@@ -72,7 +147,7 @@ This will open a web interface where you can:
    - Confidence score
 5. **Export results** as JSON for further use
 
-### Command Line Interface (CLI)
+### 3. Command Line Interface (CLI)
 
 The analyzer also provides a powerful command-line interface for automation and scripting:
 
@@ -243,6 +318,68 @@ python cli.py --title "Security Issue" --description "Details..." --custom-promp
 - **Compliance Check**: Ensure code meets specific coding standards or regulations
 - **Domain-Specific**: Tailor analysis for specific frameworks or technologies
 
+## Security Features
+
+The AI Issue Triage system includes comprehensive security protections to prevent misuse and protect the AI analysis system.
+
+### Prompt Injection Detection
+
+The system automatically scans all issue content for potential prompt injection attempts using:
+
+- **Machine Learning Detection**: Uses the `pytector` library with trained models
+- **Pattern-Based Detection**: Custom regex patterns for common injection techniques
+- **Heuristic Analysis**: Behavioral analysis for suspicious content patterns
+
+### Detection Categories
+
+The system identifies various types of malicious inputs:
+
+- **Role Manipulation**: Attempts to change the AI's role or persona
+- **System Prompts**: Trying to inject system-level instructions
+- **Instruction Bypass**: Commands to ignore previous instructions
+- **File Manipulation**: Requests to create, modify, or access files
+- **Code Injection**: Attempts to execute arbitrary code
+- **Data Extraction**: Trying to extract sensitive information
+- **Prompt Leakage**: Attempts to reveal system prompts
+
+### Risk Levels
+
+Issues are classified into risk levels:
+
+- **Critical**: Severe injection attempts (flagged and processing stopped)
+- **High**: Clear malicious intent (flagged with warning)
+- **Medium**: Suspicious patterns (flagged for review)
+- **Low**: Minor concerns (noted but processed)
+- **Safe**: No security concerns detected
+
+### Security Response
+
+When prompt injection is detected:
+
+1. **Issue Flagging**: Adds security labels (`security-alert`, `prompt-injection-detected`)
+2. **Warning Comment**: Posts educational message explaining the detection
+3. **Processing Halt**: Stops AI analysis to prevent system manipulation
+4. **Audit Trail**: Logs detection details for security review
+
+## Duplicate Detection
+
+The system includes intelligent duplicate detection to prevent redundant analysis and improve issue management.
+
+### How It Works
+
+- **Semantic Analysis**: Uses AI to understand issue meaning beyond exact text matches
+- **Similarity Scoring**: Calculates confidence scores for potential duplicates
+- **Context Awareness**: Considers issue status, labels, and resolution state
+- **Cross-Reference**: Compares against all existing open issues
+
+### Duplicate Handling
+
+When duplicates are detected:
+- **Automatic Labeling**: Adds `duplicate` label
+- **Reference Comment**: Links to the original issue
+- **Processing Skip**: Avoids redundant AI analysis
+- **Consolidation**: Helps maintainers merge related issues
+
 ## Smart Retry Mechanism
 
 The analyzer includes an intelligent retry system that automatically detects low-quality responses and retries the analysis for better results.
@@ -340,15 +477,26 @@ python cli.py --title "Issue" --description "Details" --retries 0
 ## Project Structure
 
 ```
-Gemini-Issue/
-├── app.py                 # Streamlit web interface
-├── gemini_analyzer.py     # Core analyzer class
-├── models.py              # Pydantic data models
-├── requirements.txt       # Python dependencies
-├── .gitignore            # Git ignore patterns
-├── env_example.txt       # Environment variables template
-├── README.md             # This file
-└── repomix-output.txt    # Your codebase content (generated)
+AI-Issue-Triage/
+├── app.py                      # Streamlit web interface
+├── cli.py                      # Command-line interface
+├── gemini_analyzer.py          # Core analyzer class
+├── models.py                   # Pydantic data models and enums
+├── prompt_injection.py         # Security: Prompt injection detection
+├── duplicate_analyzer.py       # Duplicate detection logic
+├── duplicate_cli.py            # CLI for duplicate detection
+├── cosine_duplicate_analyzer.py # Cosine similarity duplicate detection
+├── duplicate_cosine_cli.py     # CLI for cosine-based duplicate detection
+├── test_analyzer.py            # Unit tests for analyzer
+├── test_duplicate_analyzer.py  # Unit tests for duplicate detection
+├── run_app.py                  # Application runner
+├── requirements.txt            # Python dependencies
+├── .gitignore                  # Git ignore patterns
+├── env_example.txt             # Environment variables template
+├── README.md                   # This documentation
+├── sample_issue.txt            # Example issue for testing
+├── sample_issues.json          # Sample issues data
+└── repomix-output.txt         # Your codebase content (generated)
 ```
 
 ## Contributing
