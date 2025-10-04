@@ -3,6 +3,7 @@
 from enum import Enum
 from typing import Optional, List
 from pydantic import BaseModel, Field
+from dataclasses import dataclass
 
 
 class IssueType(str, Enum):
@@ -74,3 +75,23 @@ class DuplicateDetectionResult(BaseModel):
     similarity_reasons: List[str] = Field(description="Reasons why issues are considered similar")
     confidence_score: float = Field(description="Confidence in the duplicate detection (0-1)", ge=0, le=1)
     recommendation: str = Field(description="Recommendation for handling the duplicate")
+
+
+class InjectionRisk(Enum):
+    """Risk levels for prompt injection detection."""
+    SAFE = "safe"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+@dataclass
+class InjectionResult:
+    """Result of prompt injection detection."""
+    is_injection: bool
+    risk_level: InjectionRisk
+    confidence_score: float
+    detected_patterns: List[str]
+    sanitized_text: Optional[str] = None
+    details: Optional[str] = None
