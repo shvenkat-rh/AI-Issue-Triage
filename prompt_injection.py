@@ -15,10 +15,7 @@ try:
     PYTECTOR_AVAILABLE = True
 except ImportError:
     PYTECTOR_AVAILABLE = False
-    # Only log warning if not in CLI mode
-    import sys
-    if __name__ != "__main__" or len(sys.argv) == 1:
-        logging.warning("pytector library not available. Prompt injection detection will be limited.")
+    logging.warning("pytector library not available. Prompt injection detection will be limited.")
 
 
 class PromptInjectionDetector:
@@ -342,9 +339,6 @@ if __name__ == "__main__":
     import argparse
     import json
     
-    # Suppress logging warnings for CLI usage
-    logging.getLogger().setLevel(logging.ERROR)
-    
     # Check if we have command line arguments for CLI usage
     if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
         # Simple CLI usage: python prompt_injection.py "title" "description"
@@ -352,7 +346,7 @@ if __name__ == "__main__":
             title = sys.argv[1]
             description = sys.argv[2]
             
-            # Don't print debug messages to stderr when outputting JSON
+            # Run detection without debug output for CI
             title_result = detect_prompt_injection(title) if title else None
             desc_result = detect_prompt_injection(description) if description else None
             
