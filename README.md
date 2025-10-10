@@ -1,5 +1,10 @@
 # Gemini Issue Analyzer
 
+![Unit Tests](https://github.com/shvenkat-rh/AI-Issue-Triage/actions/workflows/unit-tests.yml/badge.svg)
+![Lint](https://github.com/shvenkat-rh/AI-Issue-Triage/actions/workflows/lint.yml/badge.svg)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 An AI-powered issue analysis tool that uses Google's Gemini AI to perform comprehensive analysis of software issues based on your codebase content.
 
 ## Features
@@ -474,10 +479,116 @@ python cli.py --title "Issue" --description "Details" --retries 0
 }
 ```
 
+## Testing
+
+The project includes a comprehensive test suite to ensure code quality and reliability.
+
+### Continuous Integration
+
+Automated quality checks run on every pull request and push to main via GitHub Actions:
+
+#### Unit Tests Workflow (`unit-tests.yml`)
+- **✅ Unit Tests**: Run on Python 3.9, 3.10, 3.11, and 3.12
+- **📊 Coverage Report**: Automatic code coverage tracking
+- **⚡ Fast**: Only unit tests run (no API calls required)
+
+#### Lint Workflow (`lint.yml`)
+- **🔍 Black**: Code formatting checks
+- **📋 isort**: Import sorting validation
+- **🐛 Flake8**: Code quality and style linting
+- **🚫 Blocking**: PRs cannot merge if formatting issues exist
+
+See `.github/workflows/` for configuration details.
+
+### Running Tests Locally
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run with verbose output
+pytest tests/ -v
+
+# Run with coverage report
+pytest tests/ --cov=. --cov-report=html
+
+# Run only unit tests (no API required)
+pytest tests/ -m unit -v
+
+# Run only integration tests (requires API key)
+pytest tests/ -m integration -v
+
+# Run specific test file
+pytest tests/test_models.py -v
+
+# Use the test runner script
+python run_tests.py --coverage
+```
+
+### Running Linting Checks Locally
+
+Before pushing code, run these checks locally:
+
+```bash
+# Install linting tools
+pip install black isort flake8 flake8-docstrings flake8-bugbear
+
+# Auto-fix formatting issues
+black .
+isort .
+
+# Check formatting without fixing
+black --check --diff .
+isort --check-only --diff .
+
+# Run flake8 linting
+flake8 . --max-line-length=127 --extend-ignore=E203,W503
+
+# Run all checks at once
+black . && isort . && flake8 .
+```
+
+### Test Organization
+
+```
+tests/
+├── __init__.py                       # Package initialization
+├── conftest.py                       # Pytest configuration & fixtures
+├── test_models.py                    # Tests for data models (64 tests total)
+├── test_gemini_analyzer.py           # Tests for Gemini analyzer
+├── test_duplicate_analyzer.py        # Tests for Gemini duplicate detection
+├── test_cosine_duplicate_analyzer.py # Tests for cosine similarity analyzer
+└── README.md                         # Detailed test documentation
+```
+
+### Test Features
+
+- **64 comprehensive test cases** covering all major functionality
+- **Unit tests**: Fast tests that don't require API access
+- **Integration tests**: Tests that interact with Gemini API
+- **Fixtures**: Reusable test data and setup
+- **Markers**: Categorize tests by type (unit, integration, slow)
+- **Coverage**: Track code coverage with detailed reports
+
+See `tests/README.md` for detailed testing documentation.
+
 ## Project Structure
 
 ```
 AI-Issue-Triage/
+├── .github/
+│   └── workflows/
+│       ├── gemini-issue-analysis.yml  # Auto issue analysis workflow
+│       ├── unit-tests.yml             # CI/CD unit tests workflow
+│       └── lint.yml                   # CI/CD linting workflow
+├── tests/                      # Comprehensive test suite
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── test_models.py
+│   ├── test_gemini_analyzer.py
+│   ├── test_duplicate_analyzer.py
+│   ├── test_cosine_duplicate_analyzer.py
+│   └── README.md
 ├── app.py                      # Streamlit web interface
 ├── cli.py                      # Command-line interface
 ├── gemini_analyzer.py          # Core analyzer class
@@ -487,9 +598,11 @@ AI-Issue-Triage/
 ├── duplicate_cli.py            # CLI for duplicate detection
 ├── cosine_duplicate_analyzer.py # Cosine similarity duplicate detection
 ├── duplicate_cosine_cli.py     # CLI for cosine-based duplicate detection
-├── test_analyzer.py            # Unit tests for analyzer
-├── test_duplicate_analyzer.py  # Unit tests for duplicate detection
 ├── run_app.py                  # Application runner
+├── run_tests.py                # Test runner with options
+├── pytest.ini                  # Pytest configuration
+├── pyproject.toml              # Black, isort, and coverage configuration
+├── .flake8                     # Flake8 linting configuration
 ├── requirements.txt            # Python dependencies
 ├── .gitignore                  # Git ignore patterns
 ├── env_example.txt             # Environment variables template
