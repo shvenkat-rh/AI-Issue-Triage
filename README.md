@@ -1,8 +1,7 @@
 # Gemini Issue Analyzer
 
-![Unit Tests](https://github.com/shvenkat-rh/AI-Issue-Triage/actions/workflows/unit-tests.yml/badge.svg)
-![Lint](https://github.com/shvenkat-rh/AI-Issue-Triage/actions/workflows/lint.yml/badge.svg)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+![CI](https://github.com/shvenkat-rh/AI-Issue-Triage/actions/workflows/ci.yml/badge.svg)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 An AI-powered issue analysis tool that uses Google's Gemini AI to perform comprehensive analysis of software issues based on your codebase content.
@@ -485,18 +484,16 @@ The project includes a comprehensive test suite to ensure code quality and relia
 
 ### Continuous Integration
 
-Automated quality checks run on every pull request and push to main via GitHub Actions:
+Automated quality checks run on every pull request and push to main via GitHub Actions.
 
-#### Unit Tests Workflow (`unit-tests.yml`)
-- **✅ Unit Tests**: Run on Python 3.9, 3.10, 3.11, and 3.12
-- **📊 Coverage Report**: Automatic code coverage tracking
-- **⚡ Fast**: Only unit tests run (no API calls required)
+#### CI Workflow (`ci.yml`) - **All-in-One Status Check**
+The main CI workflow combines all checks into a single status:
+- **✅ Unit Tests**: Run on Python 3.11, 3.12, and 3.13
+- **✅ Lint Checks**: Black, isort, and flake8
+- **🟢 Single Status**: Only turns green when ALL checks pass
+- **🚫 Branch Protection**: Use "CI / All Checks Pass" as required status check
 
-#### Lint Workflow (`lint.yml`)
-- **🔍 Black**: Code formatting checks
-- **📋 isort**: Import sorting validation
-- **🐛 Flake8**: Code quality and style linting
-- **🚫 Blocking**: PRs cannot merge if formatting issues exist
+The CI workflow runs both unit tests and linting, providing a single green checkmark when everything passes. This makes it easy to set up branch protection rules.
 
 See `.github/workflows/` for configuration details.
 
@@ -509,8 +506,8 @@ pytest tests/
 # Run with verbose output
 pytest tests/ -v
 
-# Run with coverage report
-pytest tests/ --cov=. --cov-report=html
+# Run with coverage report (optional, requires pytest-cov)
+# pytest tests/ --cov=. --cov-report=html
 
 # Run only unit tests (no API required)
 pytest tests/ -m unit -v
@@ -522,7 +519,7 @@ pytest tests/ -m integration -v
 pytest tests/test_models.py -v
 
 # Use the test runner script
-python run_tests.py --coverage
+python run_tests.py
 ```
 
 ### Running Linting Checks Locally
@@ -568,7 +565,6 @@ tests/
 - **Integration tests**: Tests that interact with Gemini API
 - **Fixtures**: Reusable test data and setup
 - **Markers**: Categorize tests by type (unit, integration, slow)
-- **Coverage**: Track code coverage with detailed reports
 
 See `tests/README.md` for detailed testing documentation.
 
@@ -579,8 +575,7 @@ AI-Issue-Triage/
 ├── .github/
 │   └── workflows/
 │       ├── gemini-issue-analysis.yml  # Auto issue analysis workflow
-│       ├── unit-tests.yml             # CI/CD unit tests workflow
-│       └── lint.yml                   # CI/CD linting workflow
+│       └── ci.yml                     # Combined CI workflow (tests + lint)
 ├── tests/                      # Comprehensive test suite
 │   ├── __init__.py
 │   ├── conftest.py
