@@ -1,4 +1,4 @@
-# Gemini Issue Analyzer
+# AI Issue Triage
 
 ![CI](https://github.com/shvenkat-rh/AI-Issue-Triage/actions/workflows/ci.yml/badge.svg)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
