@@ -385,7 +385,7 @@ This is useful for:
 
 The workflows clone from:
 - **Repository**: `shvenkat-rh/AI-Issue-Triage`
-- **Branch**: `updated-genai-package`
+- **Branch**: `main`
 
 To use a fork or different branch, modify the workflow:
 
