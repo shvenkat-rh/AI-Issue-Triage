@@ -35,9 +35,12 @@ def pytest_configure(config):
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to add markers automatically."""
     for item in items:
-        # Add integration marker to tests that use analyzer fixtures
+        # Add integration marker to tests that use analyzer fixtures (requiring API)
         if "analyzer" in item.fixturenames or "api_key" in item.fixturenames:
             item.add_marker(pytest.mark.integration)
+        else:
+            # All other tests are unit tests (don't require API)
+            item.add_marker(pytest.mark.unit)
 
         # Add slow marker to batch tests
         if "batch" in item.name.lower():

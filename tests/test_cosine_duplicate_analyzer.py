@@ -141,7 +141,9 @@ class TestDuplicateDetection:
         """Test that custom similarity threshold is respected."""
         # With higher threshold (0.7), fewer issues should be marked as duplicates
         result = custom_analyzer.detect_duplicate(
-            title="Login button crash", description="App crashes on login", existing_issues=sample_issues
+            new_issue_title="Login button crash",
+            new_issue_description="App crashes on login",
+            existing_issues=sample_issues,
         )
 
         # Even if similarity is high, threshold should be 0.7

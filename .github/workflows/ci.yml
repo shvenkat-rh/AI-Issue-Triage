@@ -49,6 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false  # Don't cancel other jobs if one fails
       matrix:
         python-version: ['3.11', '3.12', '3.13']
     
