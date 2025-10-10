@@ -67,6 +67,10 @@ This system provides two automated workflows:
 
 ### 2. Gemini API Key
 
+> **⚠️ Important Notes**:
+> - **Red Hat employees**: Do NOT follow these steps. Please refer to the RH Internal Guidelines for generating your API keys.
+> - **Already have a GCP/Gemini API key?** You can skip this section and use your existing key.
+
 You'll need a Google Gemini API key:
 
 1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)

@@ -591,26 +591,13 @@ Automated quality checks run on every pull request and push to main via GitHub A
 
 #### CI Workflow (`ci.yml`) - **All-in-One Status Check**
 
-The main CI workflow combines all checks into a single unified status badge:
 
-**Unit Tests (Matrix Strategy)**
-- ✅ Runs on Python **3.11, 3.12, and 3.13**
-- ✅ All versions run in **parallel**
-- ✅ **fail-fast: false** - All Python versions complete even if one fails
-- ✅ Tests: **23 unit tests** (no API required)
 
 **Lint Checks**
 -  **Black**: Code formatting validation
 -  **isort**: Import sorting validation
 -  **Flake8**: Code quality linting
 -  **Blocking**: PRs cannot merge if linting fails
-
-**All Checks Pass Job**
-- 🟢 **Single Status**: Only turns green when ALL checks pass
-- 🎯 **Branch Protection**: Use "CI / All Checks Pass" as required status check
-- ✅ Combines results from all Python versions + lint checks
-
-The CI workflow provides a single green checkmark when everything passes, making it perfect for branch protection rules.
 
 See `.github/workflows/ci.yml` for configuration details.
 
