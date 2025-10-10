@@ -158,7 +158,9 @@ The workflow generates several artifacts for debugging and audit purposes:
 
 ---
 
-### 2. Web Interface (Interactive) - Local Development
+### 2. Web Interface (Interactive) - 🚧 Work in Progress
+
+> **⚠️ Note**: The Streamlit web interface is currently under development and not recommended for production use.
 
 ```bash
 streamlit run app.py
@@ -177,6 +179,8 @@ This will open a web interface where you can:
    - Proposed solutions with code changes
    - Confidence score
 5. **Export results** as JSON for further use
+
+**Status**: We're actively working on improving the UI/UX. For production use, please use the GitHub Actions workflow or CLI.
 
 ---
 
@@ -244,7 +248,77 @@ Can be multiple lines.
 Include all relevant details.
 ```
 
-### Command Line Usage (Programmatic)
+---
+
+## Additional Command-Line Tools
+
+The project includes several specialized CLI tools for specific tasks:
+
+### 1. Duplicate Issue Detection (duplicate_cli.py)
+
+Detect duplicate issues using AI-powered semantic analysis:
+
+```bash
+# Check if a new issue is duplicate
+python duplicate_cli.py --title "Issue title" --description "Issue details" --existing-issues issues.json
+
+# Batch check multiple issues
+python duplicate_cli.py --file new-issues.json --existing-issues existing-issues.json
+```
+
+**Features**:
+- AI-powered semantic similarity detection
+- Compares against existing open issues
+- Provides similarity scores and recommendations
+
+**Status**: ✅ Stable and ready for use
+
+---
+
+### 2. Cosine Similarity Duplicate Detection (duplicate_cosine_cli.py)
+
+Alternative duplicate detection using TF-IDF and cosine similarity:
+
+```bash
+python duplicate_cosine_cli.py --title "Issue title" --description "Details" --existing-issues issues.json
+```
+
+**Features**:
+- Fast, no API required
+- Uses scikit-learn TF-IDF vectorization
+- Good for offline/local analysis
+
+**Status**: 🚧 Experimental - We're still refining the similarity thresholds and accuracy. Use with caution.
+
+---
+
+### 3. Prompt Injection Detection (prompt_injection.py)
+
+Security tool to detect malicious prompt injection attempts:
+
+```bash
+# Direct usage
+python prompt_injection.py --text "Issue content to check"
+
+# Or use as a library
+from prompt_injection import PromptInjectionDetector
+
+detector = PromptInjectionDetector()
+result = detector.detect("Issue content")
+print(f"Risk Level: {result.risk_level}")
+```
+
+**Features**:
+- Detects prompt injection patterns
+- ML-based detection using pytector
+- Pattern-based heuristics
+- Risk level classification
+
+**Status**: ✅ Stable - Automatically integrated into GitHub Actions workflows
+
+---
+
+### Programmatic Usage (Python Library)
 
 You can also use the analyzer programmatically:
 
@@ -625,27 +699,40 @@ AI-Issue-Triage/
 │   ├── test_duplicate_analyzer.py
 │   ├── test_cosine_duplicate_analyzer.py
 │   └── README.md
-├── app.py                      # Streamlit web interface
-├── cli.py                      # Command-line interface
-├── gemini_analyzer.py          # Core analyzer class
-├── models.py                   # Pydantic data models and enums
-├── prompt_injection.py         # Security: Prompt injection detection
-├── duplicate_analyzer.py       # Duplicate detection logic
-├── duplicate_cli.py            # CLI for duplicate detection
-├── cosine_duplicate_analyzer.py # Cosine similarity duplicate detection
-├── duplicate_cosine_cli.py     # CLI for cosine-based duplicate detection
-├── run_app.py                  # Application runner
-├── run_tests.py                # Test runner with options
-├── pytest.ini                  # Pytest configuration
-├── pyproject.toml              # Black, isort, and coverage configuration
-├── .flake8                     # Flake8 linting configuration
-├── requirements.txt            # Python dependencies
-├── .gitignore                  # Git ignore patterns
-├── env_example.txt             # Environment variables template
-├── README.md                   # This documentation
-├── sample_issue.txt            # Example issue for testing
-├── sample_issues.json          # Sample issues data
-└── repomix-output.txt         # Your codebase content (generated)
+├── cutlery/                    # 🚀 Quick Start resources
+│   ├── QUICKSTART.md          # Complete setup guide
+│   ├── workflows/             # GitHub Actions workflow templates
+│   ├── triage.config.json     # Example configuration
+│   └── samples/               # Sample files for testing
+├── Core Analysis
+│   ├── cli.py                 # ✅ Main CLI - Issue analysis
+│   ├── gemini_analyzer.py     # Core analyzer class
+│   ├── models.py              # Pydantic data models
+│   └── prompt_injection.py    # ✅ Security: Prompt injection detection
+├── Duplicate Detection
+│   ├── duplicate_cli.py       # ✅ CLI for AI duplicate detection
+│   ├── duplicate_analyzer.py  # Gemini-based duplicate detection
+│   ├── duplicate_cosine_cli.py # 🚧 CLI for cosine similarity (WIP)
+│   └── cosine_duplicate_analyzer.py # TF-IDF based detection
+├── Web Interface
+│   ├── app.py                 # 🚧 Streamlit UI (WIP)
+│   └── run_app.py             # Application runner
+├── Configuration & Testing
+│   ├── pytest.ini             # Pytest configuration
+│   ├── pyproject.toml         # Black, isort configuration
+│   ├── .flake8                # Flake8 linting configuration
+│   ├── run_tests.py           # Test runner with options
+│   ├── requirements.txt       # Python dependencies
+│   └── env_example.txt        # Environment variables template
+└── Documentation & Samples
+    ├── README.md              # This documentation
+    ├── sample_issue.txt       # Example issue for testing
+    └── sample_issues.json     # Sample issues data
+
+Legend:
+✅ = Stable and ready for production use
+🚧 = Work in progress, use with caution
+🚀 = Recommended starting point
 ```
 
 ## Contributing
