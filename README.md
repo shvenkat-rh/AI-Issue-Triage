@@ -47,6 +47,10 @@ pip install -r requirements.txt
 
 ### 2. Get Gemini API Key
 
+> **⚠️ Important Notes**:
+> - **Red Hat employees**: Do NOT follow these steps. Please refer to the RH Internal Guidelines for generating your API keys.
+> - **Already have a GCP/Gemini API key?** You can skip this section and use your existing key.
+
 1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. Create a new API key
 3. Copy the `env_example.txt` to `.env` and add your API key:
@@ -591,13 +595,23 @@ Automated quality checks run on every pull request and push to main via GitHub A
 
 #### CI Workflow (`ci.yml`) - **All-in-One Status Check**
 
+The main CI workflow combines all checks into a single unified status:
 
+**Unit Tests (Matrix Strategy)**
+- Runs on Python **3.11, 3.12, and 3.13**
+- All versions run in **parallel**
+- **fail-fast: false** - All Python versions complete even if one fails
 
 **Lint Checks**
--  **Black**: Code formatting validation
--  **isort**: Import sorting validation
--  **Flake8**: Code quality linting
--  **Blocking**: PRs cannot merge if linting fails
+- **Black**: Code formatting validation
+- **isort**: Import sorting validation
+- **Flake8**: Code quality linting
+- **Blocking**: PRs cannot merge if linting fails
+
+**All Checks Pass Job**
+- Single unified status check
+- Only passes if all unit tests AND linting succeed
+- Perfect for branch protection rules
 
 See `.github/workflows/ci.yml` for configuration details.
 
@@ -655,20 +669,19 @@ black . && isort . && flake8 .
 tests/
 ├── __init__.py                       # Package initialization
 ├── conftest.py                       # Pytest configuration & fixtures
-├── test_models.py                    # Tests for data models (64 tests total)
+├── test_models.py                    # Tests for data models
 ├── test_gemini_analyzer.py           # Tests for Gemini analyzer
 ├── test_duplicate_analyzer.py        # Tests for Gemini duplicate detection
-├── test_cosine_duplicate_analyzer.py # Tests for cosine similarity analyzer
-└── README.md                         # Detailed test documentation
+└── test_cosine_duplicate_analyzer.py # Tests for cosine similarity analyzer
 ```
 
 ### Test Features
 
-- **64 comprehensive test cases** covering all major functionality
+- **Comprehensive test coverage** for all major functionality
 - **Fixtures**: Reusable test data and setup
 - **Markers**: Categorize tests by type (unit, integration, slow)
-
-See `tests/README.md` for detailed testing documentation.
+- **Unit tests**: No API key required, fast execution
+- **Integration tests**: Require GEMINI_API_KEY for full functionality
 
 ## Project Structure
 
@@ -684,8 +697,7 @@ AI-Issue-Triage/
 │   ├── test_models.py
 │   ├── test_gemini_analyzer.py
 │   ├── test_duplicate_analyzer.py
-│   ├── test_cosine_duplicate_analyzer.py
-│   └── README.md
+│   └── test_cosine_duplicate_analyzer.py
 ├── cutlery/                    # 🚀 Quick Start resources
 │   ├── QUICKSTART.md          # Complete setup guide
 │   ├── workflows/             # GitHub Actions workflow templates
