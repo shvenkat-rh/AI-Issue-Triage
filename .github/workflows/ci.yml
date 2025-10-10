@@ -100,11 +100,11 @@ jobs:
       
       - name: Check code formatting with black
         run: |
-          black --check --diff --color .
+          black --check --diff .
       
       - name: Check import sorting with isort
         run: |
-          isort --check-only --diff --color .
+          isort --check-only --diff .
       
       - name: Lint with flake8
         run: |
