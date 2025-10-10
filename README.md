@@ -6,6 +6,22 @@
 
 An AI-powered issue analysis tool that uses Google's Gemini AI to perform comprehensive analysis of software issues based on your codebase content.
 
+---
+
+## 🚀 Quick Start
+
+**Want to set up automated issue analysis in your GitHub repo?**
+
+👉 **[See the QUICKSTART Guide](cutlery/QUICKSTART.md)** for step-by-step instructions to:
+- Set up automated GitHub Actions workflows
+- Configure AI-powered issue analysis
+- Analyze issues against your codebase automatically
+- Get started in under 10 minutes
+
+**Looking to use this as a CLI tool or library?** Continue reading below.
+
+---
+
 ## Features
 
 - **AI-Powered Analysis**: Uses Google Gemini 2.0 Flash for intelligent issue analysis with the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/)
@@ -59,21 +75,30 @@ repomix --output repomix-output.txt
 
 ## Usage
 
-The AI Issue Triage system can be used in three main ways:
+The AI Issue Triage system can be used in multiple ways:
 
-### 1. GitHub Actions Workflow (Automated)
+### 1. GitHub Actions Workflow (Automated) - ⚡ RECOMMENDED
 
-The most powerful way to use this system is through the automated GitHub Actions workflow, which provides continuous issue analysis for your repository.
+> **📖 For complete setup instructions, see the [QUICKSTART Guide](cutlery/QUICKSTART.md)**
 
-#### Setup for GitHub Actions
+### Quick Overview
 
-1. **Add the workflow file** to your repository at `.github/workflows/gemini-issue-analysis.yml`
-2. **Configure repository secrets**:
-   - Go to your repository Settings → Secrets and variables → Actions
-   - Add `GEMINI_API_KEY` with your Google Gemini API key
-3. **Enable workflow permissions**:
-   - Go to Settings → Actions → General
-   - Set "Workflow permissions" to "Read and write permissions"
+The most powerful way to use this system is through automated GitHub Actions workflows. The system provides:
+
+- **Single Issue Analysis**: Analyzes each new issue as it's created
+- **Bulk Issue Analysis**: Re-analyzes all open issues when code changes
+- **Security Checks**: Built-in prompt injection detection
+- **Duplicate Detection**: Identifies similar/duplicate issues
+
+#### Quick Setup
+
+For detailed step-by-step instructions, **see the [QUICKSTART Guide](cutlery/QUICKSTART.md)**.
+
+**TL;DR**:
+1. Copy workflows from `cutlery/workflows/` to `.github/workflows/` in your repo
+2. Add `GEMINI_API_KEY` secret in GitHub repository settings
+3. Create `triage.config.json` (example in `cutlery/triage.config.json`)
+4. Push changes and create a test issue
 
 #### How It Works
 
@@ -131,7 +156,9 @@ The workflow generates several artifacts for debugging and audit purposes:
 - **`analysis_result.txt`**: Human-readable analysis results
 - **`repomix-output.txt`**: Generated codebase content
 
-### 2. Web Interface (Interactive)
+---
+
+### 2. Web Interface (Interactive) - Local Development
 
 ```bash
 streamlit run app.py
@@ -151,7 +178,9 @@ This will open a web interface where you can:
    - Confidence score
 5. **Export results** as JSON for further use
 
-### 3. Command Line Interface (CLI)
+---
+
+### 3. Command Line Interface (CLI) - Scripting & Automation
 
 The analyzer also provides a powerful command-line interface for automation and scripting:
 
@@ -699,6 +728,14 @@ For issues and questions:
 1. Check the existing issues
 2. Create a new issue with detailed description
 3. Include your environment details and error messages
+
+---
+
+## 📚 Additional Resources
+
+- **[QUICKSTART Guide](cutlery/QUICKSTART.md)** - Complete setup guide for GitHub Actions workflows
+- **[Test Examples](cutlery/samples/)** - Sample files for testing and configuration
+- **[Workflow Templates](cutlery/workflows/)** - Ready-to-use GitHub Actions workflows
 
 ---
 

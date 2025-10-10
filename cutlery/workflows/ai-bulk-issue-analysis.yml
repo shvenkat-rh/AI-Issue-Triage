@@ -98,6 +98,171 @@ jobs:
               console.log(`Analyzing issue #${issue.number}: ${issue.title}`);
               
               try {
+                // Check for prompt injection first - using same approach as gemini-issue-analysis.yml
+                console.log(`Checking for prompt injection in issue #${issue.number}...`);
+                console.log(`ISSUE_TITLE: '${issue.title}'`);
+                console.log(`ISSUE_DESCRIPTION: '${issue.body || ''}'`);
+                
+                let hasInjection = false;
+                let riskLevel = 'safe';
+                
+                // Check if prompt_injection.py exists
+                if (fs.existsSync('ai-triage/prompt_injection.py')) {
+                  console.log('Using prompt_injection.py for security check');
+                  
+                  const resultFile = `ai-triage/prompt_injection_${issue.number}.json`;
+                  const debugFile = `ai-triage/prompt_injection_debug_${issue.number}.log`;
+                  
+                  // Run prompt injection detection using the clean CLI interface
+                  try {
+                    execSync(
+                      `cd ai-triage && python3 prompt_injection.py "${issue.title.replace(/"/g, '\\"')}" "${(issue.body || '').replace(/"/g, '\\"')}" > prompt_injection_${issue.number}.json 2>prompt_injection_debug_${issue.number}.log`,
+                      { cwd: process.cwd() }
+                    );
+                    console.log('Prompt injection detection completed successfully');
+                  } catch (e) {
+                    console.log('WARNING: Prompt injection detection failed, running debug mode...');
+                    try {
+                      execSync(
+                        `cd ai-triage && python3 prompt_injection.py "${issue.title.replace(/"/g, '\\"')}" "${(issue.body || '').replace(/"/g, '\\"')}" --debug > prompt_injection_${issue.number}.json 2>&1`,
+                        { cwd: process.cwd() }
+                      );
+                    } catch (debugError) {
+                      console.log('Debug mode also failed, assuming safe input');
+                      fs.writeFileSync(resultFile, JSON.stringify({
+                        has_prompt_injection: false,
+                        risk_level: 'safe',
+                        error: 'detection_failed'
+                      }));
+                    }
+                  }
+                  
+                  console.log('Script execution completed, checking results...');
+                  
+                  // Show debug log if it exists
+                  if (fs.existsSync(debugFile)) {
+                    const debugContent = fs.readFileSync(debugFile, 'utf8');
+                    if (debugContent.trim()) {
+                      console.log('Debug log contents:');
+                      console.log(debugContent);
+                    }
+                  }
+                  
+                  // Parse results with validation
+                  if (fs.existsSync(resultFile)) {
+                    const resultContent = fs.readFileSync(resultFile, 'utf8');
+                    console.log(`Contents of prompt_injection_${issue.number}.json:`);
+                    console.log(resultContent);
+                    
+                    // Validate JSON first (similar to jq empty check)
+                    try {
+                      const injectionResult = JSON.parse(resultContent);
+                      hasInjection = injectionResult.has_prompt_injection || false;
+                      riskLevel = injectionResult.risk_level || 'safe';
+                      console.log(`Parsed has_prompt_injection: ${hasInjection}`);
+                      console.log(`Parsed risk_level: ${riskLevel}`);
+                    } catch (parseError) {
+                      console.log('ERROR: Invalid JSON in prompt_injection result');
+                      console.log('Raw content:', resultContent);
+                      hasInjection = false;
+                      riskLevel = 'safe';
+                    }
+                    
+                    if (hasInjection) {
+                      console.log(`SECURITY ALERT: Prompt injection detected! Risk Level: ${riskLevel}`);
+                    } else {
+                      console.log('No prompt injection detected');
+                    }
+                  } else {
+                    console.log('No result file found, assuming no injection');
+                    hasInjection = false;
+                    riskLevel = 'safe';
+                  }
+                } else {
+                  console.log('prompt_injection.py not found, skipping security check');
+                  hasInjection = false;
+                  riskLevel = 'safe';
+                }
+                
+                // Always post prompt injection analysis report regardless of severity
+                const riskEmoji = {
+                  'critical': '🚨',
+                  'high': '⚠️',
+                  'medium': '⚡',
+                  'low': 'ℹ️',
+                  'safe': '✅'
+                };
+                
+                const isHighRisk = ['critical', 'high'].includes(riskLevel);
+                
+                let comment = (riskEmoji[riskLevel] || '✅') + ' **Prompt Injection Analysis Report**\n\n' +
+                  '**Risk Level:** ' + riskLevel.toUpperCase() + '\n\n';
+                
+                if (riskLevel === 'safe') {
+                  comment += 'This issue has been analyzed and appears to be safe. No prompt injection patterns were detected.\n\n' +
+                    '**Analysis Result:** ✅ SAFE\n\n' +
+                    'The issue content does not contain any suspicious patterns or attempts to manipulate the AI analysis system.\n\n';
+                } else if (isHighRisk) {
+                  comment += '**⚠️ SECURITY ALERT**\n\n' +
+                    'This issue contains content that appears to be a significant prompt injection attempt. For security reasons, this issue will not be processed by the AI analysis system.\n\n' +
+                    '**What is prompt injection?**\n' +
+                    'Prompt injection is a type of attack where malicious instructions are embedded in user input to manipulate AI systems into performing unintended actions.\n\n' +
+                    '**Next Steps:**\n' +
+                    '- This issue will remain open but will not receive AI analysis\n' +
+                    '- Please review the issue content and remove any suspicious instructions\n' +
+                    '- If this is a legitimate issue, please rephrase it using clear, direct language\n' +
+                    '- Contact the repository maintainers if you believe this detection is incorrect\n\n';
+                } else {
+                  comment += 'This issue contains content that may contain prompt injection patterns, but the risk level is considered manageable. The issue will be processed with additional security measures.\n\n' +
+                    '**What was detected?**\n' +
+                    'The content contains patterns that could potentially be used for prompt injection, but the confidence level is low enough to allow processing.\n\n' +
+                    '**Next Steps:**\n' +
+                    '- This issue will continue to receive AI analysis with enhanced security filtering\n' +
+                    '- If you intended to include instructions for the AI, please use clear, direct language\n' +
+                    '- Contact the repository maintainers if you have concerns about this detection\n\n';
+                }
+                
+                comment += '---\n*This security check is performed automatically to protect the AI analysis system.*';
+                
+                // Post prompt injection report for all issues
+                await github.rest.issues.createComment({
+                  issue_number: issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+                console.log(`Prompt injection analysis report posted for issue #${issue.number} (Risk: ${riskLevel})`);
+                
+                // Add appropriate labels
+                if (hasInjection) {
+                  const labels = ['security-alert'];
+                  if (isHighRisk) {
+                    labels.push('prompt-injection-blocked');
+                  } else {
+                    labels.push('prompt-injection-warning');
+                  }
+                  
+                  await github.rest.issues.addLabels({
+                    issue_number: issue.number,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    labels: labels
+                  });
+                  
+                  console.log(`Security labels added: ${labels.join(', ')}`);
+                }
+                
+                // Skip AI analysis only for high or critical risk
+                if (hasInjection && isHighRisk) {
+                  console.log(`SECURITY: Skipping AI analysis for issue #${issue.number} due to ${riskLevel} risk prompt injection`);
+                  continue; // Skip to next issue
+                }
+                
+                // Log warning for low/medium risk but continue processing
+                if (hasInjection && (riskLevel === 'low' || riskLevel === 'medium')) {
+                  console.log(`WARNING: Issue #${issue.number} has ${riskLevel} risk injection, proceeding with caution`);
+                }
+                
                 // Copy the repomix output to the AI triage directory
                 execSync(`cp ${repomixOutput} ai-triage/`, { cwd: process.cwd() });
                 
@@ -133,44 +298,16 @@ jobs:
                   console.warn(`Failed to parse JSON for issue #${issue.number}:`, jsonError);
                 }
                 
-                // Find existing analysis comment and update it, or create new one
-                const { data: comments } = await github.rest.issues.listComments({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number
-                });
-                
-                // Look for existing AI analysis comments
-                const existingComment = comments.find(comment => 
-                  comment.body.includes('Updated AI Analysis') || 
-                  comment.body.includes('Claude AI Analysis') ||
-                  comment.body.includes('Gemini AI Analysis') ||
-                  comment.body.includes('AI Analysis') ||
-                  comment.body.includes('GEMINI ISSUE ANALYSIS REPORT') ||
-                  comment.body.includes('CLAUDE ISSUE ANALYSIS REPORT')
-                );
-                
+                // Always create new comment (don't update existing)
                 const updatedComment = `## Updated AI Analysis\n\n*This analysis was updated following recent changes to the codebase.*\n\n${analysisText}`;
                 
-                if (existingComment) {
-                  // Update existing comment
-                  await github.rest.issues.updateComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    comment_id: existingComment.id,
-                    body: updatedComment
-                  });
-                  console.log(`Updated existing analysis comment for issue #${issue.number}`);
-                } else {
-                  // Create new comment if none exists
-                  await github.rest.issues.createComment({
-                    issue_number: issue.number,
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    body: updatedComment
-                  });
-                  console.log(`Created new analysis comment for issue #${issue.number}`);
-                }
+                await github.rest.issues.createComment({
+                  issue_number: issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: updatedComment
+                });
+                console.log(`Created new analysis comment for issue #${issue.number}`);
                 
                 // Replace existing analysis labels with new ones
                 if (analysisJson) {
