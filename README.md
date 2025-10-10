@@ -487,15 +487,29 @@ The project includes a comprehensive test suite to ensure code quality and relia
 Automated quality checks run on every pull request and push to main via GitHub Actions.
 
 #### CI Workflow (`ci.yml`) - **All-in-One Status Check**
-The main CI workflow combines all checks into a single status:
-- **✅ Unit Tests**: Run on Python 3.11, 3.12, and 3.13
-- **✅ Lint Checks**: Black, isort, and flake8
-- **🟢 Single Status**: Only turns green when ALL checks pass
-- **🚫 Branch Protection**: Use "CI / All Checks Pass" as required status check
 
-The CI workflow runs both unit tests and linting, providing a single green checkmark when everything passes. This makes it easy to set up branch protection rules.
+The main CI workflow combines all checks into a single unified status badge:
 
-See `.github/workflows/` for configuration details.
+**Unit Tests (Matrix Strategy)**
+- ✅ Runs on Python **3.11, 3.12, and 3.13**
+- ✅ All versions run in **parallel**
+- ✅ **fail-fast: false** - All Python versions complete even if one fails
+- ✅ Tests: **23 unit tests** (no API required)
+
+**Lint Checks**
+-  **Black**: Code formatting validation
+-  **isort**: Import sorting validation
+-  **Flake8**: Code quality linting
+-  **Blocking**: PRs cannot merge if linting fails
+
+**All Checks Pass Job**
+- 🟢 **Single Status**: Only turns green when ALL checks pass
+- 🎯 **Branch Protection**: Use "CI / All Checks Pass" as required status check
+- ✅ Combines results from all Python versions + lint checks
+
+The CI workflow provides a single green checkmark when everything passes, making it perfect for branch protection rules.
+
+See `.github/workflows/ci.yml` for configuration details.
 
 ### Running Tests Locally
 
@@ -561,8 +575,6 @@ tests/
 ### Test Features
 
 - **64 comprehensive test cases** covering all major functionality
-- **Unit tests**: Fast tests that don't require API access
-- **Integration tests**: Tests that interact with Gemini API
 - **Fixtures**: Reusable test data and setup
 - **Markers**: Categorize tests by type (unit, integration, slow)
 
@@ -609,15 +621,77 @@ AI-Issue-Triage/
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+We welcome contributions! Please follow these steps:
+
+### Development Workflow
+
+1. **Fork and clone** the repository
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/AI-Issue-Triage.git
+   cd AI-Issue-Triage
+   ```
+
+2. **Create a feature branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   pip install black isort flake8 pytest
+   ```
+
+4. **Make your changes** and format code
+   ```bash
+   # Auto-format code
+   black .
+   isort .
+   
+   # Check linting
+   flake8 .
+   ```
+
+5. **Add tests** for new functionality
+   - Add unit tests in `tests/`
+   - Run tests locally: `pytest tests/ -m unit -v`
+
+6. **Run CI checks locally**
+   ```bash
+   # Run all unit tests
+   pytest tests/ -m unit -v
+   
+   # Check formatting
+   black --check .
+   isort --check-only .
+   flake8 .
+   ```
+
+7. **Commit and push**
+   ```bash
+   git add .
+   git commit -m "Description of your changes"
+   git push origin feature/your-feature-name
+   ```
+
+8. **Submit a pull request**
+   - CI will automatically run tests and linting
+   - All checks must pass before merging
+   - The "CI / All Checks Pass" status must be green
+
+### Code Standards
+
+- **Python versions**: Must support 3.11, 3.12, and 3.13
+- **Formatting**: Use `black` with 127 character line length
+- **Import sorting**: Use `isort` with black-compatible settings
+- **Linting**: Must pass `flake8` checks
+- **Testing**: Add tests for new features
+- **Documentation**: Update README for significant changes
+
 
 ## License
 
-This project is open source and available under the MIT License.
+This project is licensed under the Apache License 2.0.
 
 ## Support
 

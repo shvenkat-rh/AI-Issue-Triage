@@ -1,0 +1,260 @@
+name: AI Bulk Issue Analysis
+
+on:
+  pull_request:
+    types: [ closed ]
+    branches: [ main ]
+
+jobs:
+  analyze-all-issues:
+    if: github.event_name == 'push' || (github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    
+    permissions:
+      issues: write
+      contents: read
+    
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js for repomix
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Setup Python for AI analysis
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install repomix
+        run: |
+          npm install -g repomix
+          echo "Repomix installed successfully"
+          repomix --version
+      
+      - name: Generate repomix output for ansible-creator
+        run: |
+          echo "Reading configuration from triage.config.json..."
+          REPO_URL=$(jq -r '.repository.url' triage.config.json)
+          REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' triage.config.json)
+          echo "Repository URL: $REPO_URL"
+          echo "Repomix output path: $REPOMIX_OUTPUT"
+          
+          echo "Running repomix on repository using remote..."
+          repomix --remote "$REPO_URL" --output "$REPOMIX_OUTPUT"
+          echo "Repomix output generated successfully"
+          ls -la "$REPOMIX_OUTPUT"
+      
+      - name: Clone AI-Issue-Triage repository
+        uses: actions/checkout@v4
+        with:
+          repository: shvenkat-rh/AI-Issue-Triage
+          ref: updated-genai-package
+          path: ai-triage
+          fetch-depth: 1
+      
+      - name: Install Python dependencies for AI triage
+        run: |
+          cd ai-triage
+          pip install -r requirements.txt
+          echo "Python dependencies installed successfully"
+      
+      - name: Analyze all open issues
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+            
+            // Get all open issues
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            
+            // Filter out pull requests
+            const actualIssues = issues.filter(issue => !issue.pull_request);
+            console.log(`Found ${actualIssues.length} open issues`);
+            
+            // Read configuration
+            const configContent = fs.readFileSync('triage.config.json', 'utf8');
+            const config = JSON.parse(configContent);
+            const repomixOutput = config.repomix.output_path;
+            const customPromptPath = config.analysis.custom_prompt_path;
+            
+            console.log(`Using repomix output: ${repomixOutput}`);
+            if (customPromptPath) {
+              console.log(`Using custom prompt: ${customPromptPath}`);
+            }
+            
+            // Process each issue
+            for (const issue of actualIssues) {
+              console.log(`Analyzing issue #${issue.number}: ${issue.title}`);
+              
+              try {
+                // Copy the repomix output to the AI triage directory
+                execSync(`cp ${repomixOutput} ai-triage/`, { cwd: process.cwd() });
+                
+                // Build CLI arguments
+                let cliArgs = `--title "${issue.title.replace(/"/g, '\\"')}" --description "${(issue.body || '').replace(/"/g, '\\"')}" --source-path "${repomixOutput}"`;
+                
+                // Add custom prompt if specified
+                if (customPromptPath && customPromptPath !== '' && fs.existsSync(customPromptPath)) {
+                  cliArgs += ` --custom-prompt "../${customPromptPath}"`;
+                }
+                
+                // Run the CLI analysis for both JSON and text formats
+                const analysisCommandJson = `cd ai-triage && python cli.py ${cliArgs} --format json --output analysis_result.json --quiet`;
+                const analysisCommandText = `cd ai-triage && python cli.py ${cliArgs} --format text --output analysis_result.txt --quiet`;
+                
+                execSync(analysisCommandJson, { 
+                  cwd: process.cwd(),
+                  env: { ...process.env, GEMINI_API_KEY: process.env.GEMINI_API_KEY }
+                });
+                
+                execSync(analysisCommandText, { 
+                  cwd: process.cwd(),
+                  env: { ...process.env, GEMINI_API_KEY: process.env.GEMINI_API_KEY }
+                });
+                
+                // Read both analysis results
+                const analysisText = fs.readFileSync('ai-triage/analysis_result.txt', 'utf8');
+                let analysisJson = null;
+                try {
+                  const jsonContent = fs.readFileSync('ai-triage/analysis_result.json', 'utf8');
+                  analysisJson = JSON.parse(jsonContent);
+                } catch (jsonError) {
+                  console.warn(`Failed to parse JSON for issue #${issue.number}:`, jsonError);
+                }
+                
+                // Find existing analysis comment and update it, or create new one
+                const { data: comments } = await github.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number
+                });
+                
+                // Look for existing AI analysis comments
+                const existingComment = comments.find(comment => 
+                  comment.body.includes('Updated AI Analysis') || 
+                  comment.body.includes('Claude AI Analysis') ||
+                  comment.body.includes('Gemini AI Analysis') ||
+                  comment.body.includes('AI Analysis') ||
+                  comment.body.includes('GEMINI ISSUE ANALYSIS REPORT') ||
+                  comment.body.includes('CLAUDE ISSUE ANALYSIS REPORT')
+                );
+                
+                const updatedComment = `## Updated AI Analysis\n\n*This analysis was updated following recent changes to the codebase.*\n\n${analysisText}`;
+                
+                if (existingComment) {
+                  // Update existing comment
+                  await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: existingComment.id,
+                    body: updatedComment
+                  });
+                  console.log(`Updated existing analysis comment for issue #${issue.number}`);
+                } else {
+                  // Create new comment if none exists
+                  await github.rest.issues.createComment({
+                    issue_number: issue.number,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    body: updatedComment
+                  });
+                  console.log(`Created new analysis comment for issue #${issue.number}`);
+                }
+                
+                // Replace existing analysis labels with new ones
+                if (analysisJson) {
+                  try {
+                    // Get current labels
+                    const { data: currentIssue } = await github.rest.issues.get({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issue.number
+                    });
+                    
+                    // Find and remove existing analysis labels
+                    const labelsToRemove = currentIssue.labels
+                      .map(label => typeof label === 'string' ? label : label.name)
+                      .filter(labelName => 
+                        labelName.startsWith('gemini-') || 
+                        labelName.startsWith('claude-') || 
+                        labelName.startsWith('type:') || 
+                        labelName.startsWith('severity:')
+                      );
+                    
+                    // Remove old analysis labels
+                    for (const labelName of labelsToRemove) {
+                      try {
+                        await github.rest.issues.removeLabel({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: issue.number,
+                          name: labelName
+                        });
+                      } catch (removeError) {
+                        console.warn(`Failed to remove label "${labelName}" from issue #${issue.number}:`, removeError);
+                      }
+                    }
+                    
+                    // Add new analysis labels
+                    const newLabels = [];
+                    
+                    // Add analysis label
+                    newLabels.push('gemini-analyzed');
+                    
+                    // Add type label if available
+                    if (analysisJson.issue_type && analysisJson.issue_type !== 'null' && analysisJson.issue_type !== '') {
+                      newLabels.push(`type:${analysisJson.issue_type.toLowerCase()}`);
+                    }
+                    
+                    // Add severity label if available
+                    if (analysisJson.severity && analysisJson.severity !== 'null' && analysisJson.severity !== '') {
+                      newLabels.push(`severity:${analysisJson.severity.toLowerCase()}`);
+                    }
+                    
+                    if (newLabels.length > 0) {
+                      await github.rest.issues.addLabels({
+                        issue_number: issue.number,
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        labels: newLabels
+                      });
+                      
+                      console.log(`Issue #${issue.number} labels updated: removed [${labelsToRemove.join(', ')}], added [${newLabels.join(', ')}]`);
+                    }
+                    
+                  } catch (labelError) {
+                    console.warn(`Failed to update labels for issue #${issue.number}:`, labelError);
+                  }
+                }
+                
+                console.log(`Issue #${issue.number} analyzed successfully`);
+                
+              } catch (error) {
+                console.error(`Issue #${issue.number} analysis failed:`, error);
+              }
+            }
+            
+            console.log('Bulk analysis completed');
+      
+      - name: Upload analysis artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bulk-issue-analysis-${{ github.sha }}
+          path: |
+            ai-triage/analysis_result.json
+            ai-triage/analysis_result.txt
+            repomix-output.txt
+            triage.config.json
+          retention-days: 30
