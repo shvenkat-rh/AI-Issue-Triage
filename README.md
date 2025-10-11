@@ -366,12 +366,12 @@ You can also use the analyzer programmatically:
 
 ```python
 # Import from the package
-from utils import GeminiIssueAnalyzer
-from utils.models import IssueType, Severity
+from utils import GeminiIssueAnalyzer, IssueAnalysis, IssueType, Severity
 
 # Or import specific modules
 from utils.analyzer import GeminiIssueAnalyzer
 from utils.duplicate import CosineDuplicateAnalyzer, GeminiDuplicateAnalyzer
+from utils.models import IssueAnalysis, IssueType, Severity
 from utils.security import PromptInjectionDetector
 
 # Initialize analyzer with default source path
