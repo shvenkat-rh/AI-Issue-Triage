@@ -45,6 +45,8 @@ This system provides two automated workflows:
 
 2. **Bulk Issue Analysis** (`ai-bulk-issue-analysis.yml`)
    - Triggers when a PR is merged to main
+   - Processes all open issues (oldest → newest)
+   - Smart duplicate detection: compares each issue against previously analyzed ones
    - Re-analyzes all open issues with updated codebase context
    - Posts new analysis comments with fresh insights
    - Includes prompt injection reports for all issues
@@ -372,15 +374,39 @@ This is useful for:
 **Triggered**: When a PR is merged to main
 
 **What it does**:
-1. Re-analyzes ALL open issues
-2. Posts prompt injection report for each issue
-3. Posts updated AI analysis (using new codebase)
-4. Updates labels based on new analysis
+1. Fetches all open issues (sorted oldest → newest)
+2. For each issue (in order):
+   - **Step 1: Prompt Injection Check**
+     - Scans for malicious patterns
+     - Posts security report comment
+     - Adds `security-alert`, `prompt-injection-blocked` or `prompt-injection-warning` labels
+     - Skips analysis for high/critical risk issues
+   - **Step 2: Duplicate Detection** (if security check passes)
+     - Compares against previously analyzed issues in this run
+     - If duplicate: adds `duplicate` label, posts duplicate comment with confidence score, skips AI analysis
+   - **Step 3: AI Analysis** (if not duplicate)
+     - Runs full analysis against updated codebase
+     - Posts "Updated AI Analysis" comment with fresh insights
+     - Adds labels: `gemini-analyzed`, `type:*`, `severity:*`
+
+**Smart Duplicate Detection**:
+- Issues are processed **oldest first**
+- Each issue is compared against all previously analyzed issues in this run
+- Older issues become "canonical" - newer duplicates reference them
+- Duplicates are marked and skipped to save API calls
+- Example: If Issue #50 and Issue #100 are duplicates, #100 will reference #50
+
+**Comments Posted**:
+Every issue receives at least one comment:
+- **Prompt Injection Report** - Posted for all issues (safe or risky)
+- **Duplicate Detection Comment** - Posted if duplicate found (with confidence score and reasoning)
+- **Updated AI Analysis** - Posted only for non-duplicate, safe issues (full analysis with fresh codebase context)
 
 **Use Cases**:
 - After major code refactoring
 - When issue context changes
 - Periodic re-analysis of open issues
+- Cleaning up duplicate issues automatically
 
 ---
 

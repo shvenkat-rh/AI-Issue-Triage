@@ -107,9 +107,9 @@ The AI Issue Triage system can be used in multiple ways:
 The most powerful way to use this system is through automated GitHub Actions workflows. The system provides:
 
 - **Single Issue Analysis**: Analyzes each new issue as it's created
-- **Bulk Issue Analysis**: Re-analyzes all open issues when code changes
+- **Bulk Issue Analysis**: Re-analyzes all open issues when code changes (with smart duplicate detection)
 - **Security Checks**: Built-in prompt injection detection
-- **Duplicate Detection**: Identifies similar/duplicate issues
+- **Duplicate Detection**: Identifies similar/duplicate issues automatically
 
 #### Quick Setup
 
@@ -123,7 +123,7 @@ For detailed step-by-step instructions, **see the [QUICKSTART Guide](cutlery/QUI
 
 #### How It Works
 
-When a new issue is opened in your repository, the workflow automatically:
+**Single Issue Analysis** - When a new issue is opened:
 
 1. **Security Check**: Scans for prompt injection attempts to protect the AI system
 2. **Duplicate Detection**: Compares against existing issues to identify duplicates
@@ -131,12 +131,32 @@ When a new issue is opened in your repository, the workflow automatically:
 4. **Auto-Labeling**: Adds appropriate labels based on issue type and severity
 5. **Comment Generation**: Posts detailed analysis results as issue comments
 
+**Bulk Issue Analysis** - When a PR is merged to main:
+
+1. Fetches all open issues (sorted oldest → newest for canonical duplicate handling)
+2. For each issue in sequential order:
+   - **Prompt Injection Check**: Scans and posts security report comment
+   - **Duplicate Detection**: Compares against previously analyzed issues in this run
+     - If duplicate: adds label, posts duplicate comment with confidence score, skips AI analysis
+   - **AI Analysis**: Re-analyzes with updated codebase (only if not duplicate and safe)
+     - Posts "Updated AI Analysis" comment with fresh insights
+3. Automatically labels and comments on all issues
+
+> **Note**: Bulk analysis is efficient - duplicates and high-risk issues skip expensive AI analysis, saving API calls and time.
+
 #### Workflow Features
 
 - **Security Protection**: Automatically detects and flags malicious prompt injection attempts
-- **Duplicate Detection**: Identifies similar issues and prevents redundant analysis
-- **Smart Labeling**: Adds labels like `type:bug`, `severity:high`, `gemini-analyzed`
-- **Detailed Comments**: Posts comprehensive analysis directly to GitHub issues
+- **Smart Duplicate Detection**: 
+  - Single issue workflow: checks against all existing open issues
+  - Bulk analysis workflow: processes oldest → newest, comparing each against previously analyzed in the same run
+  - Older issues become "canonical" references for newer duplicates
+  - Duplicates are marked and skipped to save API calls
+- **Smart Labeling**: Adds labels like `type:bug`, `severity:high`, `gemini-analyzed`, `duplicate`, `security-alert`
+- **Comprehensive Comments**: Posts three types of comments:
+  - Prompt injection security reports (all issues)
+  - Duplicate detection results (when duplicates found)
+  - Updated AI analysis (non-duplicate, safe issues)
 - **Artifact Storage**: Saves analysis results and debug logs for review
 - **Fast Processing**: Uses latest Gemini 2.0 Flash model for quick analysis
 
