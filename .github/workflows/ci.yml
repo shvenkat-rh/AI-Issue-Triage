@@ -7,11 +7,8 @@ on:
       - main
       - master
   
-  # Run on pull requests
+  # Run on all pull requests (regardless of target branch)
   pull_request:
-    branches:
-      - main
-      - master
 
 jobs:
   # This job waits for all other CI jobs to complete
