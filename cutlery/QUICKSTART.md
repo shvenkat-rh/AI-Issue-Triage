@@ -84,11 +84,15 @@ You'll need a Google Gemini API key:
 
 This system uses the [AI-Issue-Triage](https://github.com/shvenkat-rh/AI-Issue-Triage) repository, which contains:
 
-- `cli.py` - Main analysis CLI
-- `duplicate_cli.py` - Duplicate issue detection
-- `prompt_injection.py` - Security checks
-- `gemini_analyzer.py` - AI analysis engine
-- `models.py` - Data models
+- `utils/` - Core library package
+  - `analyzer.py` - AI analysis engine
+  - `models.py` - Data models
+  - `duplicate/` - Duplicate detection modules
+  - `security/` - Security checks (prompt injection)
+- `cli/` - Command-line tools
+  - `analyze.py` - Main analysis CLI
+  - `duplicate_check.py` - Duplicate detection CLI
+  - `cosine_check.py` - Cosine similarity CLI
 
 The workflows automatically clone this repository during execution - **no manual setup needed**.
 

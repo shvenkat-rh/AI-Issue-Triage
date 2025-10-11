@@ -5,7 +5,7 @@ import os
 import pytest
 from dotenv import load_dotenv
 
-from gemini_analyzer import GeminiIssueAnalyzer
+from utils.analyzer import GeminiIssueAnalyzer
 
 # Load environment variables
 load_dotenv()

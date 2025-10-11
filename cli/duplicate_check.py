@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line interface for the Cosine Similarity Duplicate Issue Analyzer."""
+"""Command-line interface for the Gemini Duplicate Issue Analyzer."""
 
 import argparse
 import json
@@ -7,8 +7,8 @@ import sys
 from datetime import datetime
 from typing import List
 
-from cosine_duplicate_analyzer import CosineDuplicateAnalyzer
-from models import IssueReference
+from utils.duplicate.gemini_duplicate import GeminiDuplicateAnalyzer
+from utils.models import IssueReference
 
 
 def load_issues_from_file(file_path: str) -> List[IssueReference]:
@@ -118,22 +118,6 @@ def create_sample_issues_file(file_path: str):
             "created_date": "2024-01-25",
             "url": "https://github.com/example/repo/issues/3",
         },
-        {
-            "issue_id": "ISSUE-004",
-            "title": "Submit button not working on login form",
-            "description": "Users report that clicking the submit button on the login form doesn't work. The page doesn't respond and no error is shown. This issue affects multiple browsers.",
-            "status": "open",
-            "created_date": "2024-01-28",
-            "url": "https://github.com/example/repo/issues/4",
-        },
-        {
-            "issue_id": "ISSUE-005",
-            "title": "Database timeout errors during peak hours",
-            "description": "During high traffic periods, the database connection times out frequently. This causes authentication failures and data loading issues for users.",
-            "status": "open",
-            "created_date": "2024-01-30",
-            "url": "https://github.com/example/repo/issues/5",
-        },
     ]
 
     with open(file_path, "w", encoding="utf-8") as f:
@@ -191,27 +175,21 @@ def validate_issues_file(file_path: str):
 def main():
     """Main CLI function."""
     parser = argparse.ArgumentParser(
-        description="Cosine Similarity Duplicate Issue Analyzer - Detect duplicate issues using TF-IDF and cosine similarity",
+        description="Gemini Duplicate Issue Analyzer - Detect duplicate issues using AI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Check if a new issue is a duplicate
-  python duplicate_cosine_cli.py --title "Login error" --description "Can't log in" --issues issues.json
+  python duplicate_cli.py --title "Login error" --description "Can't log in" --issues issues.json
 
   # Create a sample issues file
-  python duplicate_cosine_cli.py --create-sample issues.json
+  python duplicate_cli.py --create-sample issues.json
   
   # Validate an existing issues file
-  python duplicate_cosine_cli.py --validate-issues issues.json
+  python duplicate_cli.py --validate-issues issues.json
   
   # Interactive mode
-  python duplicate_cosine_cli.py --interactive --issues issues.json
-  
-  # Custom similarity threshold
-  python duplicate_cosine_cli.py --title "Bug" --description "Error" --issues issues.json --threshold 0.8
-  
-  # Show top similar issues
-  python duplicate_cosine_cli.py --title "Bug" --description "Error" --issues issues.json --show-similar 3
+  python duplicate_cli.py --interactive --issues issues.json
 
 Supported JSON formats:
   The tool accepts various JSON formats including GitHub API responses.
@@ -223,15 +201,6 @@ Supported JSON formats:
   
   Example standard format:
   [{"issue_id": "1", "title": "Bug", "description": "Description", "status": "open"}]
-
-Algorithm Details:
-  This tool uses TF-IDF (Term Frequency-Inverse Document Frequency) vectorization
-  combined with cosine similarity to detect duplicate issues. It:
-  - Preprocesses text by removing special characters and normalizing case
-  - Weights issue titles more heavily than descriptions
-  - Uses unigrams and bigrams for better context understanding
-  - Calculates cosine similarity between vector representations
-  - Provides detailed similarity reasons and confidence scores
         """,
     )
 
@@ -247,20 +216,7 @@ Algorithm Details:
 
     parser.add_argument("--interactive", action="store_true", help="Run in interactive mode")
 
-    parser.add_argument(
-        "--threshold", type=float, default=0.7, help="Similarity threshold for duplicate detection (default: 0.7)"
-    )
-
-    parser.add_argument(
-        "--confidence-threshold",
-        type=float,
-        default=0.6,
-        help="Confidence threshold for high-confidence results (default: 0.6)",
-    )
-
-    parser.add_argument(
-        "--show-similar", type=int, metavar="N", help="Show top N most similar issues regardless of duplicate status"
-    )
+    parser.add_argument("--api-key", help="Gemini API key (optional, can use GEMINI_API_KEY env var)")
 
     parser.add_argument("--output", choices=["text", "json"], default="text", help="Output format (default: text)")
 
@@ -278,19 +234,12 @@ Algorithm Details:
 
     # Interactive mode
     if args.interactive:
-        run_interactive_mode(args.issues, args.threshold, args.confidence_threshold, args.show_similar)
+        run_interactive_mode(args.issues, args.api_key)
         return
 
     # Validate required arguments for duplicate detection
     if not args.title or not args.description or not args.issues:
         parser.error("--title, --description, and --issues are required for duplicate detection")
-
-    # Validate threshold values
-    if not 0.0 <= args.threshold <= 1.0:
-        parser.error("--threshold must be between 0.0 and 1.0")
-
-    if not 0.0 <= args.confidence_threshold <= 1.0:
-        parser.error("--confidence-threshold must be between 0.0 and 1.0")
 
     # Run duplicate detection
     run_duplicate_detection(args)
@@ -300,7 +249,7 @@ def run_duplicate_detection(args):
     """Run duplicate detection with provided arguments."""
     try:
         # Initialize analyzer
-        analyzer = CosineDuplicateAnalyzer(similarity_threshold=args.threshold, confidence_threshold=args.confidence_threshold)
+        analyzer = GeminiDuplicateAnalyzer(api_key=args.api_key)
 
         # Load existing issues
         existing_issues = load_issues_from_file(args.issues)
@@ -309,21 +258,14 @@ def run_duplicate_detection(args):
 
         # Perform duplicate detection
         if args.output != "json":
-            print(f"Analyzing for duplicates using cosine similarity...")
+            print(f"Checking for duplicates...")
         result = analyzer.detect_duplicate(args.title, args.description, existing_issues)
-
-        # Show similar issues if requested
-        similar_issues = []
-        if args.show_similar:
-            similar_issues = analyzer.find_most_similar_issues(
-                args.title, args.description, existing_issues, top_k=args.show_similar
-            )
 
         # Output results
         if args.output == "json":
-            output_json(result, similar_issues)
+            output_json(result)
         else:
-            output_text(result, args.title, similar_issues)
+            output_text(result, args.title)
 
     except Exception as e:
         if args.output == "json":
@@ -336,7 +278,6 @@ def run_duplicate_detection(args):
                 "similarity_reasons": [],
                 "recommendation": f"Analysis failed: {str(e)}",
                 "duplicate_of": None,
-                "similar_issues": [],
                 "timestamp": datetime.now().isoformat(),
             }
             print(json.dumps(error_output, indent=2))
@@ -345,7 +286,7 @@ def run_duplicate_detection(args):
         sys.exit(1)
 
 
-def run_interactive_mode(issues_file: str, threshold: float, confidence_threshold: float, show_similar: int):
+def run_interactive_mode(issues_file: str, api_key: str):
     """Run the analyzer in interactive mode."""
     if not issues_file:
         print("ERROR: --issues file is required for interactive mode")
@@ -353,25 +294,21 @@ def run_interactive_mode(issues_file: str, threshold: float, confidence_threshol
 
     try:
         # Initialize analyzer
-        analyzer = CosineDuplicateAnalyzer(similarity_threshold=threshold, confidence_threshold=confidence_threshold)
+        analyzer = GeminiDuplicateAnalyzer(api_key=api_key)
 
         # Load existing issues
         existing_issues = load_issues_from_file(issues_file)
         print(f"Loaded {len(existing_issues)} existing issues")
 
-        print("\n" + "=" * 70)
-        print("COSINE SIMILARITY DUPLICATE ISSUE ANALYZER - Interactive Mode")
-        print("=" * 70)
-        print(f"Similarity threshold: {threshold}")
-        print(f"Confidence threshold: {confidence_threshold}")
-        if show_similar:
-            print(f"Showing top {show_similar} similar issues")
+        print("\n" + "=" * 60)
+        print("GEMINI DUPLICATE ISSUE ANALYZER - Interactive Mode")
+        print("=" * 60)
         print("Enter 'quit' or 'exit' to stop\n")
 
         while True:
             try:
                 # Get user input
-                print("-" * 50)
+                print("-" * 40)
                 title = input("Enter issue title: ").strip()
 
                 if title.lower() in ["quit", "exit"]:
@@ -389,16 +326,11 @@ def run_interactive_mode(issues_file: str, threshold: float, confidence_threshol
                     continue
 
                 # Perform duplicate detection
-                print("\nAnalyzing for duplicates using cosine similarity...")
+                print("\nAnalyzing for duplicates...")
                 result = analyzer.detect_duplicate(title, description, existing_issues)
 
-                # Get similar issues if requested
-                similar_issues = []
-                if show_similar:
-                    similar_issues = analyzer.find_most_similar_issues(title, description, existing_issues, top_k=show_similar)
-
                 # Display results
-                output_text(result, title, similar_issues)
+                output_text(result, title)
 
             except KeyboardInterrupt:
                 print("\nGoodbye!")
@@ -411,14 +343,14 @@ def run_interactive_mode(issues_file: str, threshold: float, confidence_threshol
         sys.exit(1)
 
 
-def output_text(result, title: str, similar_issues: list = None):
+def output_text(result, title: str):
     """Output results in text format."""
-    print(f"\nCOSINE SIMILARITY DUPLICATE DETECTION RESULTS")
-    print("=" * 60)
+    print(f"\nDUPLICATE DETECTION RESULTS")
+    print("=" * 50)
     print(f"Issue Title: {title}")
     print(f"Is Duplicate: {'YES' if result.is_duplicate else 'NO'}")
-    print(f"Similarity Score: {result.similarity_score:.3f}")
-    print(f"Confidence Score: {result.confidence_score:.3f}")
+    print(f"Similarity Score: {result.similarity_score:.2f}")
+    print(f"Confidence Score: {result.confidence_score:.2f}")
 
     if result.is_duplicate and result.duplicate_of:
         print(f"\nDUPLICATE OF:")
@@ -436,20 +368,8 @@ def output_text(result, title: str, similar_issues: list = None):
     print(f"\nRECOMMENDATION:")
     print(f"   {result.recommendation}")
 
-    # Show similar issues if provided
-    if similar_issues:
-        print(f"\nTOP SIMILAR ISSUES:")
-        print("-" * 40)
-        for i, (issue, similarity) in enumerate(similar_issues, 1):
-            print(f"{i}. {issue.issue_id}: {issue.title}")
-            print(f"   Similarity: {similarity:.3f}")
-            print(f"   Status: {issue.status}")
-            if issue.url:
-                print(f"   URL: {issue.url}")
-            print()
 
-
-def output_json(result, similar_issues: list = None):
+def output_json(result):
     """Output results in JSON format."""
     output_data = {
         "is_duplicate": result.is_duplicate,
@@ -458,7 +378,6 @@ def output_json(result, similar_issues: list = None):
         "similarity_reasons": result.similarity_reasons,
         "recommendation": result.recommendation,
         "duplicate_of": None,
-        "similar_issues": [],
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -469,18 +388,6 @@ def output_json(result, similar_issues: list = None):
             "status": result.duplicate_of.status,
             "url": result.duplicate_of.url,
         }
-
-    if similar_issues:
-        output_data["similar_issues"] = [
-            {
-                "issue_id": issue.issue_id,
-                "title": issue.title,
-                "status": issue.status,
-                "url": issue.url,
-                "similarity_score": similarity,
-            }
-            for issue, similarity in similar_issues
-        ]
 
     print(json.dumps(output_data, indent=2))
 

@@ -116,7 +116,7 @@ jobs:
                   // Run prompt injection detection using the clean CLI interface
                   try {
                     execSync(
-                      `cd ai-triage && python3 prompt_injection.py "${issue.title.replace(/"/g, '\\"')}" "${(issue.body || '').replace(/"/g, '\\"')}" > prompt_injection_${issue.number}.json 2>prompt_injection_debug_${issue.number}.log`,
+                      `cd ai-triage && python3 -m utils.security.prompt_injection "${issue.title.replace(/"/g, '\\"')}" "${(issue.body || '').replace(/"/g, '\\"')}" > prompt_injection_${issue.number}.json 2>prompt_injection_debug_${issue.number}.log`,
                       { cwd: process.cwd() }
                     );
                     console.log('Prompt injection detection completed successfully');
@@ -124,7 +124,7 @@ jobs:
                     console.log('WARNING: Prompt injection detection failed, running debug mode...');
                     try {
                       execSync(
-                        `cd ai-triage && python3 prompt_injection.py "${issue.title.replace(/"/g, '\\"')}" "${(issue.body || '').replace(/"/g, '\\"')}" --debug > prompt_injection_${issue.number}.json 2>&1`,
+                        `cd ai-triage && python3 -m utils.security.prompt_injection "${issue.title.replace(/"/g, '\\"')}" "${(issue.body || '').replace(/"/g, '\\"')}" --debug > prompt_injection_${issue.number}.json 2>&1`,
                         { cwd: process.cwd() }
                       );
                     } catch (debugError) {
@@ -275,8 +275,8 @@ jobs:
                 }
                 
                 // Run the CLI analysis for both JSON and text formats
-                const analysisCommandJson = `cd ai-triage && python cli.py ${cliArgs} --format json --output analysis_result.json --quiet`;
-                const analysisCommandText = `cd ai-triage && python cli.py ${cliArgs} --format text --output analysis_result.txt --quiet`;
+                const analysisCommandJson = `cd ai-triage && python -m cli.analyze ${cliArgs} --format json --output analysis_result.json --quiet`;
+                const analysisCommandText = `cd ai-triage && python -m cli.analyze ${cliArgs} --format text --output analysis_result.txt --quiet`;
                 
                 execSync(analysisCommandJson, { 
                   cwd: process.cwd(),

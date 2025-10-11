@@ -5,8 +5,8 @@ from datetime import datetime
 
 import streamlit as st
 
-from gemini_analyzer import GeminiIssueAnalyzer
-from models import IssueType, Severity
+from utils.analyzer import GeminiIssueAnalyzer
+from utils.models import IssueType, Severity
 
 
 def format_code_location(location):

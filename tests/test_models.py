@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from models import (
+from utils.models import (
     CodeLocation,
     CodeSolution,
     DuplicateDetectionResult,

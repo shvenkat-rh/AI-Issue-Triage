@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from models import CodeLocation, CodeSolution, IssueAnalysis, IssueType, RootCauseAnalysis, Severity
+from utils.models import CodeLocation, CodeSolution, IssueAnalysis, IssueType, RootCauseAnalysis, Severity
 
 # Load environment variables
 load_dotenv()

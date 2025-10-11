@@ -94,11 +94,11 @@ jobs:
             echo "Using prompt_injection.py for security check"
             
             # Run prompt injection detection using the clean CLI interface
-            if python3 prompt_injection.py "$ISSUE_TITLE" "$ISSUE_DESCRIPTION" > prompt_injection_result.json 2>prompt_injection_debug.log; then
+            if python3 -m utils.security.prompt_injection "$ISSUE_TITLE" "$ISSUE_DESCRIPTION" > prompt_injection_result.json 2>prompt_injection_debug.log; then
               echo "Prompt injection detection completed successfully"
             else
               echo "WARNING: Prompt injection detection failed, running debug mode..."
-              python3 prompt_injection.py "$ISSUE_TITLE" "$ISSUE_DESCRIPTION" --debug > prompt_injection_result.json 2>&1 || {
+              python3 -m utils.security.prompt_injection "$ISSUE_TITLE" "$ISSUE_DESCRIPTION" --debug > prompt_injection_result.json 2>&1 || {
                 echo "Debug mode also failed, assuming safe input"
                 echo '{"has_prompt_injection": false, "risk_level": "safe", "error": "detection_failed"}' > prompt_injection_result.json
               }
@@ -312,7 +312,7 @@ jobs:
           
           # Run duplicate check with error handling
           set +e  # Don't exit on error temporarily
-          python duplicate_cli.py \
+          python -m cli.duplicate_check \
             --title "$ISSUE_TITLE" \
             --description "$ISSUE_DESCRIPTION" \
             --issues existing_issues.json \
@@ -331,7 +331,7 @@ jobs:
             echo "No duplicate detected (duplicate_cli.py failed)" > duplicate_result.txt
           else
             # Also generate text format for duplicate check
-            python duplicate_cli.py \
+            python -m cli.duplicate_check \
               --title "$ISSUE_TITLE" \
               --description "$ISSUE_DESCRIPTION" \
               --issues existing_issues.json \
@@ -383,12 +383,12 @@ jobs:
           
           # Run the CLI analysis using environment variables
           echo "Running AI analysis..."
-          eval "python cli.py $CLI_ARGS --format json --output analysis_result.json --quiet"
+          eval "python -m cli.analyze $CLI_ARGS --format json --output analysis_result.json --quiet"
           
           echo "Analysis completed successfully"
           
           # Also generate a text format for the comment
-          eval "python cli.py $CLI_ARGS --format text --output analysis_result.txt --quiet"
+          eval "python -m cli.analyze $CLI_ARGS --format text --output analysis_result.txt --quiet"
           
           echo "Text analysis generated"
       

@@ -65,8 +65,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from gemini_analyzer import GeminiIssueAnalyzer
-from models import IssueType, Severity
+from utils.analyzer import GeminiIssueAnalyzer
+from utils.models import IssueType, Severity
 
 
 def clean_text(text: str) -> str:

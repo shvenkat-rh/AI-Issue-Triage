@@ -9,7 +9,7 @@ methods and detailed reporting capabilities.
 import logging
 from typing import Dict, List, Optional, Tuple
 
-from models import InjectionResult, InjectionRisk
+from utils.models import InjectionResult, InjectionRisk
 
 try:
     import pytector
