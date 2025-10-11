@@ -196,22 +196,23 @@ def main():
         epilog="""
 Examples:
   # Check if a new issue is a duplicate
-  python duplicate_cosine_cli.py --title "Login error" --description "Can't log in" --issues issues.json
+  ai-triage-cosine --title "Login error" --description "Can't log in" --issues issues.json
+  # or: python -m cli.cosine_check --title "..." --issues issues.json
 
   # Create a sample issues file
-  python duplicate_cosine_cli.py --create-sample issues.json
+  ai-triage-cosine --create-sample issues.json
   
   # Validate an existing issues file
-  python duplicate_cosine_cli.py --validate-issues issues.json
+  ai-triage-cosine --validate-issues issues.json
   
   # Interactive mode
-  python duplicate_cosine_cli.py --interactive --issues issues.json
+  ai-triage-cosine --interactive --issues issues.json
   
   # Custom similarity threshold
-  python duplicate_cosine_cli.py --title "Bug" --description "Error" --issues issues.json --threshold 0.8
+  ai-triage-cosine --title "Bug" --description "Error" --issues issues.json --threshold 0.8
   
   # Show top similar issues
-  python duplicate_cosine_cli.py --title "Bug" --description "Error" --issues issues.json --show-similar 3
+  ai-triage-cosine --title "Bug" --description "Error" --issues issues.json --show-similar 3
 
 Supported JSON formats:
   The tool accepts various JSON formats including GitHub API responses.

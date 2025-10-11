@@ -90,8 +90,8 @@ jobs:
           echo "ISSUE_DESCRIPTION: '$ISSUE_DESCRIPTION'"
           
           # Use the prompt injection detection from the AI-Issue-Triage repository
-          if [ -f "prompt_injection.py" ]; then
-            echo "Using prompt_injection.py for security check"
+          if [ -f "utils/security/prompt_injection.py" ]; then
+            echo "Using utils/security/prompt_injection.py for security check"
             
             # Run prompt injection detection using the clean CLI interface
             if python3 -m utils.security.prompt_injection "$ISSUE_TITLE" "$ISSUE_DESCRIPTION" > prompt_injection_result.json 2>prompt_injection_debug.log; then
@@ -150,7 +150,7 @@ jobs:
               echo "risk_level=safe" >> $GITHUB_OUTPUT
             fi
           else
-            echo "prompt_injection.py not found, skipping security check"
+            echo "utils/security/prompt_injection.py not found, skipping security check"
             echo "has_prompt_injection=false" >> $GITHUB_OUTPUT
             echo "risk_level=safe" >> $GITHUB_OUTPUT
           fi
@@ -300,11 +300,11 @@ jobs:
           echo "Checking for duplicate issues..."
           echo "Current directory: $(pwd)"
           echo "Files in directory: $(ls -la)"
-          echo "Checking if duplicate_cli.py exists: $(ls -la duplicate_cli.py 2>/dev/null || echo 'NOT FOUND')"
+          echo "Checking if cli/duplicate_check.py exists: $(ls -la cli/duplicate_check.py 2>/dev/null || echo 'NOT FOUND')"
           
-          # Check if duplicate_cli.py exists and is executable
-          if [ ! -f "duplicate_cli.py" ]; then
-            echo "ERROR: duplicate_cli.py not found in ai-triage directory"
+          # Check if cli/duplicate_check.py exists and is executable
+          if [ ! -f "cli/duplicate_check.py" ]; then
+            echo "ERROR: cli/duplicate_check.py not found in ai-triage directory"
             echo "Available Python files:"
             find . -name "*.py" -type f
             exit 1
@@ -322,13 +322,13 @@ jobs:
           set -e  # Re-enable exit on error
           
           if [ $DUPLICATE_EXIT_CODE -ne 0 ]; then
-            echo "ERROR: duplicate_cli.py failed with exit code $DUPLICATE_EXIT_CODE"
+            echo "ERROR: cli/duplicate_check.py failed with exit code $DUPLICATE_EXIT_CODE"
             echo "Output from duplicate_result.json:"
             cat duplicate_result.json 2>/dev/null || echo "No output file created"
             
             # Create a fallback result indicating no duplicate found
-            echo '{"is_duplicate": false, "error": "duplicate_cli.py failed"}' > duplicate_result.json
-            echo "No duplicate detected (duplicate_cli.py failed)" > duplicate_result.txt
+            echo '{"is_duplicate": false, "error": "cli/duplicate_check.py failed"}' > duplicate_result.json
+            echo "No duplicate detected (cli/duplicate_check.py failed)" > duplicate_result.txt
           else
             # Also generate text format for duplicate check
             python -m cli.duplicate_check \

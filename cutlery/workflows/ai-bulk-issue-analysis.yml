@@ -106,9 +106,9 @@ jobs:
                 let hasInjection = false;
                 let riskLevel = 'safe';
                 
-                // Check if prompt_injection.py exists
-                if (fs.existsSync('ai-triage/prompt_injection.py')) {
-                  console.log('Using prompt_injection.py for security check');
+                // Check if utils/security/prompt_injection.py exists
+                if (fs.existsSync('ai-triage/utils/security/prompt_injection.py')) {
+                  console.log('Using utils/security/prompt_injection.py for security check');
                   
                   const resultFile = `ai-triage/prompt_injection_${issue.number}.json`;
                   const debugFile = `ai-triage/prompt_injection_debug_${issue.number}.log`;
@@ -179,7 +179,7 @@ jobs:
                     riskLevel = 'safe';
                   }
                 } else {
-                  console.log('prompt_injection.py not found, skipping security check');
+                  console.log('utils/security/prompt_injection.py not found, skipping security check');
                   hasInjection = false;
                   riskLevel = 'safe';
                 }
