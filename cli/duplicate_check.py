@@ -7,8 +7,8 @@ import sys
 from datetime import datetime
 from typing import List
 
-from duplicate_analyzer import GeminiDuplicateAnalyzer
-from models import IssueReference
+from utils.duplicate.gemini_duplicate import GeminiDuplicateAnalyzer
+from utils.models import IssueReference
 
 
 def load_issues_from_file(file_path: str) -> List[IssueReference]:
@@ -180,16 +180,17 @@ def main():
         epilog="""
 Examples:
   # Check if a new issue is a duplicate
-  python duplicate_cli.py --title "Login error" --description "Can't log in" --issues issues.json
+  ai-triage-duplicate --title "Login error" --description "Can't log in" --issues issues.json
+  # or: python -m cli.duplicate_check --title "..." --issues issues.json
 
   # Create a sample issues file
-  python duplicate_cli.py --create-sample issues.json
+  ai-triage-duplicate --create-sample issues.json
   
   # Validate an existing issues file
-  python duplicate_cli.py --validate-issues issues.json
+  ai-triage-duplicate --validate-issues issues.json
   
   # Interactive mode
-  python duplicate_cli.py --interactive --issues issues.json
+  ai-triage-duplicate --interactive --issues issues.json
 
 Supported JSON formats:
   The tool accepts various JSON formats including GitHub API responses.

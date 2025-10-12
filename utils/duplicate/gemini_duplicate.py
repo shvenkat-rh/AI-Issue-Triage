@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from google import genai
 
-from models import DuplicateDetectionResult, IssueReference
+from utils.models import DuplicateDetectionResult, IssueReference
 
 # Load environment variables
 load_dotenv()

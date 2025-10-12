@@ -2,8 +2,8 @@
 
 import pytest
 
-from cosine_duplicate_analyzer import CosineDuplicateAnalyzer
-from models import DuplicateDetectionResult, IssueReference
+from utils.duplicate.cosine_duplicate import CosineDuplicateAnalyzer
+from utils.models import DuplicateDetectionResult, IssueReference
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@ on:
 
 jobs:
   analyze-all-issues:
-    if: github.event_name == 'push' || (github.event.pull_request.merged == true)
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     
     permissions:
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js for repomix
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
       
       - name: Setup Python for AI analysis
         uses: actions/setup-python@v4
@@ -34,7 +34,7 @@ jobs:
           echo "Repomix installed successfully"
           repomix --version
       
-      - name: Generate repomix output for ansible-creator
+      - name: Generate repomix output
         run: |
           echo "Reading configuration from triage.config.json..."
           REPO_URL=$(jq -r '.repository.url' triage.config.json)
@@ -58,340 +58,325 @@ jobs:
       - name: Install Python dependencies for AI triage
         run: |
           cd ai-triage
-          pip install -r requirements.txt
+          
+          echo "Installing Python dependencies..."
+          if pip install -r requirements.txt; then
           echo "Python dependencies installed successfully"
+          else
+            echo "ERROR: Failed to install Python dependencies"
+            echo "Requirements file contents:"
+            cat requirements.txt
+            exit 1
+          fi
+          
+          # Verify critical packages are installed
+          python3 -c "import pytector; print('✓ pytector installed')" || echo "⚠️ pytector not available"
+          python3 -c "import google.genai; print('✓ google-genai installed')" || echo "⚠️ google-genai not available"
       
-      - name: Analyze all open issues
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: Fetch all open issues
+        id: fetch-issues
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const { execSync } = require('child_process');
             
-            // Get all open issues
+            // Get all open issues (oldest first for duplicate detection)
             const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              per_page: 100
+              per_page: 100,
+              sort: 'created',
+              direction: 'asc'  // Oldest first
             });
             
             // Filter out pull requests
             const actualIssues = issues.filter(issue => !issue.pull_request);
-            console.log(`Found ${actualIssues.length} open issues`);
+            console.log(`Found ${actualIssues.length} open issues (processing oldest → newest)`);
             
-            // Read configuration
-            const configContent = fs.readFileSync('triage.config.json', 'utf8');
-            const config = JSON.parse(configContent);
-            const repomixOutput = config.repomix.output_path;
-            const customPromptPath = config.analysis.custom_prompt_path;
+            // Save issue numbers to file for bash processing
+            const issueNumbers = actualIssues.map(i => i.number);
+            fs.writeFileSync('issue_numbers.txt', issueNumbers.join('\n') + '\n');
             
-            console.log(`Using repomix output: ${repomixOutput}`);
-            if (customPromptPath) {
-              console.log(`Using custom prompt: ${customPromptPath}`);
-            }
+            // Also save full issue data for duplicate detection
+            const issueData = actualIssues.map(i => ({
+              number: i.number,
+              title: i.title,
+              body: i.body || '',
+              html_url: i.html_url,
+              labels: i.labels.map(l => typeof l === 'string' ? l : l.name)
+            }));
+            fs.writeFileSync('all_issues.json', JSON.stringify(issueData, null, 2));
             
-            // Process each issue
-            for (const issue of actualIssues) {
-              console.log(`Analyzing issue #${issue.number}: ${issue.title}`);
-              
-              try {
-                // Check for prompt injection first - using same approach as gemini-issue-analysis.yml
-                console.log(`Checking for prompt injection in issue #${issue.number}...`);
-                console.log(`ISSUE_TITLE: '${issue.title}'`);
-                console.log(`ISSUE_DESCRIPTION: '${issue.body || ''}'`);
-                
-                let hasInjection = false;
-                let riskLevel = 'safe';
-                
-                // Check if prompt_injection.py exists
-                if (fs.existsSync('ai-triage/prompt_injection.py')) {
-                  console.log('Using prompt_injection.py for security check');
-                  
-                  const resultFile = `ai-triage/prompt_injection_${issue.number}.json`;
-                  const debugFile = `ai-triage/prompt_injection_debug_${issue.number}.log`;
-                  
-                  // Run prompt injection detection using the clean CLI interface
-                  try {
-                    execSync(
-                      `cd ai-triage && python3 prompt_injection.py "${issue.title.replace(/"/g, '\\"')}" "${(issue.body || '').replace(/"/g, '\\"')}" > prompt_injection_${issue.number}.json 2>prompt_injection_debug_${issue.number}.log`,
-                      { cwd: process.cwd() }
-                    );
-                    console.log('Prompt injection detection completed successfully');
-                  } catch (e) {
-                    console.log('WARNING: Prompt injection detection failed, running debug mode...');
-                    try {
-                      execSync(
-                        `cd ai-triage && python3 prompt_injection.py "${issue.title.replace(/"/g, '\\"')}" "${(issue.body || '').replace(/"/g, '\\"')}" --debug > prompt_injection_${issue.number}.json 2>&1`,
-                        { cwd: process.cwd() }
-                      );
-                    } catch (debugError) {
-                      console.log('Debug mode also failed, assuming safe input');
-                      fs.writeFileSync(resultFile, JSON.stringify({
-                        has_prompt_injection: false,
-                        risk_level: 'safe',
-                        error: 'detection_failed'
-                      }));
-                    }
-                  }
-                  
-                  console.log('Script execution completed, checking results...');
-                  
-                  // Show debug log if it exists
-                  if (fs.existsSync(debugFile)) {
-                    const debugContent = fs.readFileSync(debugFile, 'utf8');
-                    if (debugContent.trim()) {
-                      console.log('Debug log contents:');
-                      console.log(debugContent);
-                    }
-                  }
-                  
-                  // Parse results with validation
-                  if (fs.existsSync(resultFile)) {
-                    const resultContent = fs.readFileSync(resultFile, 'utf8');
-                    console.log(`Contents of prompt_injection_${issue.number}.json:`);
-                    console.log(resultContent);
-                    
-                    // Validate JSON first (similar to jq empty check)
-                    try {
-                      const injectionResult = JSON.parse(resultContent);
-                      hasInjection = injectionResult.has_prompt_injection || false;
-                      riskLevel = injectionResult.risk_level || 'safe';
-                      console.log(`Parsed has_prompt_injection: ${hasInjection}`);
-                      console.log(`Parsed risk_level: ${riskLevel}`);
-                    } catch (parseError) {
-                      console.log('ERROR: Invalid JSON in prompt_injection result');
-                      console.log('Raw content:', resultContent);
-                      hasInjection = false;
-                      riskLevel = 'safe';
-                    }
-                    
-                    if (hasInjection) {
-                      console.log(`SECURITY ALERT: Prompt injection detected! Risk Level: ${riskLevel}`);
-                    } else {
-                      console.log('No prompt injection detected');
-                    }
-                  } else {
-                    console.log('No result file found, assuming no injection');
-                    hasInjection = false;
-                    riskLevel = 'safe';
-                  }
-                } else {
-                  console.log('prompt_injection.py not found, skipping security check');
-                  hasInjection = false;
-                  riskLevel = 'safe';
-                }
-                
-                // Always post prompt injection analysis report regardless of severity
-                const riskEmoji = {
-                  'critical': '🚨',
-                  'high': '⚠️',
-                  'medium': '⚡',
-                  'low': 'ℹ️',
-                  'safe': '✅'
-                };
-                
-                const isHighRisk = ['critical', 'high'].includes(riskLevel);
-                
-                let comment = (riskEmoji[riskLevel] || '✅') + ' **Prompt Injection Analysis Report**\n\n' +
-                  '**Risk Level:** ' + riskLevel.toUpperCase() + '\n\n';
-                
-                if (riskLevel === 'safe') {
-                  comment += 'This issue has been analyzed and appears to be safe. No prompt injection patterns were detected.\n\n' +
-                    '**Analysis Result:** ✅ SAFE\n\n' +
-                    'The issue content does not contain any suspicious patterns or attempts to manipulate the AI analysis system.\n\n';
-                } else if (isHighRisk) {
-                  comment += '**⚠️ SECURITY ALERT**\n\n' +
-                    'This issue contains content that appears to be a significant prompt injection attempt. For security reasons, this issue will not be processed by the AI analysis system.\n\n' +
-                    '**What is prompt injection?**\n' +
-                    'Prompt injection is a type of attack where malicious instructions are embedded in user input to manipulate AI systems into performing unintended actions.\n\n' +
-                    '**Next Steps:**\n' +
-                    '- This issue will remain open but will not receive AI analysis\n' +
-                    '- Please review the issue content and remove any suspicious instructions\n' +
-                    '- If this is a legitimate issue, please rephrase it using clear, direct language\n' +
-                    '- Contact the repository maintainers if you believe this detection is incorrect\n\n';
-                } else {
-                  comment += 'This issue contains content that may contain prompt injection patterns, but the risk level is considered manageable. The issue will be processed with additional security measures.\n\n' +
-                    '**What was detected?**\n' +
-                    'The content contains patterns that could potentially be used for prompt injection, but the confidence level is low enough to allow processing.\n\n' +
-                    '**Next Steps:**\n' +
-                    '- This issue will continue to receive AI analysis with enhanced security filtering\n' +
-                    '- If you intended to include instructions for the AI, please use clear, direct language\n' +
-                    '- Contact the repository maintainers if you have concerns about this detection\n\n';
-                }
-                
-                comment += '---\n*This security check is performed automatically to protect the AI analysis system.*';
-                
-                // Post prompt injection report for all issues
-                await github.rest.issues.createComment({
-                  issue_number: issue.number,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  body: comment
-                });
-                console.log(`Prompt injection analysis report posted for issue #${issue.number} (Risk: ${riskLevel})`);
-                
-                // Add appropriate labels
-                if (hasInjection) {
-                  const labels = ['security-alert'];
-                  if (isHighRisk) {
-                    labels.push('prompt-injection-blocked');
-                  } else {
-                    labels.push('prompt-injection-warning');
-                  }
-                  
-                  await github.rest.issues.addLabels({
-                    issue_number: issue.number,
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    labels: labels
-                  });
-                  
-                  console.log(`Security labels added: ${labels.join(', ')}`);
-                }
-                
-                // Skip AI analysis only for high or critical risk
-                if (hasInjection && isHighRisk) {
-                  console.log(`SECURITY: Skipping AI analysis for issue #${issue.number} due to ${riskLevel} risk prompt injection`);
-                  continue; // Skip to next issue
-                }
-                
-                // Log warning for low/medium risk but continue processing
-                if (hasInjection && (riskLevel === 'low' || riskLevel === 'medium')) {
-                  console.log(`WARNING: Issue #${issue.number} has ${riskLevel} risk injection, proceeding with caution`);
-                }
-                
-                // Copy the repomix output to the AI triage directory
-                execSync(`cp ${repomixOutput} ai-triage/`, { cwd: process.cwd() });
-                
-                // Build CLI arguments
-                let cliArgs = `--title "${issue.title.replace(/"/g, '\\"')}" --description "${(issue.body || '').replace(/"/g, '\\"')}" --source-path "${repomixOutput}"`;
-                
-                // Add custom prompt if specified
-                if (customPromptPath && customPromptPath !== '' && fs.existsSync(customPromptPath)) {
-                  cliArgs += ` --custom-prompt "../${customPromptPath}"`;
-                }
-                
-                // Run the CLI analysis for both JSON and text formats
-                const analysisCommandJson = `cd ai-triage && python cli.py ${cliArgs} --format json --output analysis_result.json --quiet`;
-                const analysisCommandText = `cd ai-triage && python cli.py ${cliArgs} --format text --output analysis_result.txt --quiet`;
-                
-                execSync(analysisCommandJson, { 
-                  cwd: process.cwd(),
-                  env: { ...process.env, GEMINI_API_KEY: process.env.GEMINI_API_KEY }
-                });
-                
-                execSync(analysisCommandText, { 
-                  cwd: process.cwd(),
-                  env: { ...process.env, GEMINI_API_KEY: process.env.GEMINI_API_KEY }
-                });
-                
-                // Read both analysis results
-                const analysisText = fs.readFileSync('ai-triage/analysis_result.txt', 'utf8');
-                let analysisJson = null;
-                try {
-                  const jsonContent = fs.readFileSync('ai-triage/analysis_result.json', 'utf8');
-                  analysisJson = JSON.parse(jsonContent);
-                } catch (jsonError) {
-                  console.warn(`Failed to parse JSON for issue #${issue.number}:`, jsonError);
-                }
-                
-                // Always create new comment (don't update existing)
-                const updatedComment = `## Updated AI Analysis\n\n*This analysis was updated following recent changes to the codebase.*\n\n${analysisText}`;
-                
-                await github.rest.issues.createComment({
-                  issue_number: issue.number,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  body: updatedComment
-                });
-                console.log(`Created new analysis comment for issue #${issue.number}`);
-                
-                // Replace existing analysis labels with new ones
-                if (analysisJson) {
-                  try {
-                    // Get current labels
-                    const { data: currentIssue } = await github.rest.issues.get({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      issue_number: issue.number
-                    });
-                    
-                    // Find and remove existing analysis labels
-                    const labelsToRemove = currentIssue.labels
-                      .map(label => typeof label === 'string' ? label : label.name)
-                      .filter(labelName => 
-                        labelName.startsWith('gemini-') || 
-                        labelName.startsWith('claude-') || 
-                        labelName.startsWith('type:') || 
-                        labelName.startsWith('severity:')
-                      );
-                    
-                    // Remove old analysis labels
-                    for (const labelName of labelsToRemove) {
-                      try {
-                        await github.rest.issues.removeLabel({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          issue_number: issue.number,
-                          name: labelName
-                        });
-                      } catch (removeError) {
-                        console.warn(`Failed to remove label "${labelName}" from issue #${issue.number}:`, removeError);
-                      }
-                    }
-                    
-                    // Add new analysis labels
-                    const newLabels = [];
-                    
-                    // Add analysis label
-                    newLabels.push('gemini-analyzed');
-                    
-                    // Add type label if available
-                    if (analysisJson.issue_type && analysisJson.issue_type !== 'null' && analysisJson.issue_type !== '') {
-                      newLabels.push(`type:${analysisJson.issue_type.toLowerCase()}`);
-                    }
-                    
-                    // Add severity label if available
-                    if (analysisJson.severity && analysisJson.severity !== 'null' && analysisJson.severity !== '') {
-                      newLabels.push(`severity:${analysisJson.severity.toLowerCase()}`);
-                    }
-                    
-                    if (newLabels.length > 0) {
-                      await github.rest.issues.addLabels({
-                        issue_number: issue.number,
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        labels: newLabels
-                      });
-                      
-                      console.log(`Issue #${issue.number} labels updated: removed [${labelsToRemove.join(', ')}], added [${newLabels.join(', ')}]`);
-                    }
-                    
-                  } catch (labelError) {
-                    console.warn(`Failed to update labels for issue #${issue.number}:`, labelError);
-                  }
-                }
-                
-                console.log(`Issue #${issue.number} analyzed successfully`);
-                
-              } catch (error) {
-                console.error(`Issue #${issue.number} analysis failed:`, error);
-              }
-            }
-            
-            console.log('Bulk analysis completed');
+            console.log(`Saved ${issueNumbers.length} issue numbers to issue_numbers.txt`);
+            console.log(`Issue numbers: ${issueNumbers.join(', ')}`);
       
-      - name: Upload analysis artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: bulk-issue-analysis-${{ github.sha }}
-          path: |
-            ai-triage/analysis_result.json
-            ai-triage/analysis_result.txt
-            repomix-output.txt
-            triage.config.json
-          retention-days: 30
+      - name: Process all issues
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          
+          # Read configuration
+          REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' triage.config.json)
+          CUSTOM_PROMPT_PATH=$(jq -r '.analysis.custom_prompt_path // ""' triage.config.json)
+          
+          echo "Using repomix output: $REPOMIX_OUTPUT"
+          if [ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ]; then
+            echo "Using custom prompt: $CUSTOM_PROMPT_PATH"
+          fi
+          
+          # Verify required files exist
+          echo ""
+          echo "Verifying required files..."
+          if [ ! -f "$REPOMIX_OUTPUT" ]; then
+            echo "ERROR: Repomix output file not found: $REPOMIX_OUTPUT"
+            ls -la
+            exit 1
+          fi
+          echo "✓ Repomix output exists: $REPOMIX_OUTPUT"
+          
+          if [ ! -f "issue_numbers.txt" ]; then
+            echo "ERROR: issue_numbers.txt not found"
+            ls -la
+            exit 1
+          fi
+          echo "✓ Issue numbers file exists"
+          
+          ISSUE_COUNT_TOTAL=$(wc -l < issue_numbers.txt | tr -d ' ')
+          if [ "$ISSUE_COUNT_TOTAL" -eq 0 ]; then
+            echo "No issues to process. Exiting successfully."
+            exit 0
+          fi
+          echo "✓ Found $ISSUE_COUNT_TOTAL issues to process"
+          echo "Issue numbers from file: $(cat issue_numbers.txt | tr '\n' ', ' | sed 's/,$//')"
+          
+          if [ ! -f "all_issues.json" ]; then
+            echo "ERROR: all_issues.json not found"
+            exit 1
+          fi
+          echo "✓ Issue data file exists"
+          
+          # Copy repomix output to ai-triage directory
+          echo ""
+          echo "Copying repomix output to ai-triage directory..."
+          cp "$REPOMIX_OUTPUT" ai-triage/
+          echo "✓ Repomix output copied"
+          
+          # Initialize analyzed issues file (for duplicate detection)
+          echo "[]" > analyzed_issues.json
+          echo "✓ Initialized analyzed_issues.json"
+          
+          # Process each issue
+          echo ""
+          echo "================================================================"
+          echo "Starting bulk analysis of $ISSUE_COUNT_TOTAL issues..."
+          echo "================================================================"
+          
+          ISSUE_COUNT=0
+          while IFS= read -r ISSUE_NUMBER; do
+            ISSUE_COUNT=$((ISSUE_COUNT + 1))
+            echo ""
+            echo "================================================================"
+            echo "Processing Issue #$ISSUE_NUMBER ($ISSUE_COUNT of $(wc -l < issue_numbers.txt))"
+            echo "================================================================"
+            
+            # Get issue details
+            ISSUE_DATA=$(jq -r ".[] | select(.number == $ISSUE_NUMBER)" all_issues.json)
+            ISSUE_TITLE=$(echo "$ISSUE_DATA" | jq -r '.title')
+            ISSUE_BODY=$(echo "$ISSUE_DATA" | jq -r '.body // ""')
+            
+            echo "Title: $ISSUE_TITLE"
+            
+            # ==================== PROMPT INJECTION CHECK ====================
+            echo ""
+            echo ">>> Step 1: Checking for prompt injection..."
+            cd ai-triage
+            
+            HAS_INJECTION="false"
+            RISK_LEVEL="safe"
+            
+            if [ -f "utils/security/prompt_injection.py" ]; then
+              if python3 -m utils.security.prompt_injection "$ISSUE_TITLE" "$ISSUE_BODY" > "prompt_injection_${ISSUE_NUMBER}.json" 2>"prompt_injection_debug_${ISSUE_NUMBER}.log"; then
+                echo "Prompt injection detection completed"
+              else
+                echo "WARNING: Prompt injection detection failed, trying debug mode..."
+                python3 -m utils.security.prompt_injection "$ISSUE_TITLE" "$ISSUE_BODY" --debug > "prompt_injection_${ISSUE_NUMBER}.json" 2>&1 || {
+                  echo '{"has_prompt_injection": false, "risk_level": "safe", "error": "detection_failed"}' > "prompt_injection_${ISSUE_NUMBER}.json"
+                }
+              fi
+              
+              # Parse results
+              if [ -f "prompt_injection_${ISSUE_NUMBER}.json" ]; then
+                HAS_INJECTION=$(jq -r '.has_prompt_injection // false' "prompt_injection_${ISSUE_NUMBER}.json")
+                RISK_LEVEL=$(jq -r '.risk_level // "safe"' "prompt_injection_${ISSUE_NUMBER}.json")
+                echo "Prompt injection detected: $HAS_INJECTION (Risk: $RISK_LEVEL)"
+              fi
+            else
+              echo "Prompt injection detection not available"
+            fi
+            
+            cd ..
+            
+            # Post prompt injection report
+            RISK_EMOJI="✅"
+            case "$RISK_LEVEL" in
+              critical) RISK_EMOJI="🚨" ;;
+              high) RISK_EMOJI="⚠️" ;;
+              medium) RISK_EMOJI="⚡" ;;
+              low) RISK_EMOJI="ℹ️" ;;
+            esac
+            
+            INJECTION_COMMENT="${RISK_EMOJI} **Prompt Injection Analysis Report**\n\n**Risk Level:** $(echo $RISK_LEVEL | tr '[:lower:]' '[:upper:]')\n\n"
+            
+            if [ "$RISK_LEVEL" = "safe" ]; then
+              INJECTION_COMMENT="${INJECTION_COMMENT}This issue has been analyzed and appears to be safe. No prompt injection patterns were detected.\n\n"
+              INJECTION_COMMENT="${INJECTION_COMMENT}**Analysis Result:** ✅ SAFE\n\n"
+            elif [ "$RISK_LEVEL" = "critical" ] || [ "$RISK_LEVEL" = "high" ]; then
+              INJECTION_COMMENT="${INJECTION_COMMENT}**⚠️ SECURITY ALERT**\n\nThis issue contains content that appears to be a prompt injection attempt. For security reasons, this issue will not be processed by the AI analysis system.\n\n"
+              
+              # Add security labels
+              gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-blocked" || echo "Failed to add labels"
+            else
+              INJECTION_COMMENT="${INJECTION_COMMENT}This issue contains content that may contain prompt injection patterns, but the risk level is manageable. Processing will continue with caution.\n\n"
+              
+              # Add warning label
+              gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-warning" || echo "Failed to add labels"
+            fi
+            
+            INJECTION_COMMENT="${INJECTION_COMMENT}---\n*This security check is performed automatically to protect the AI analysis system.*"
+            
+            # Post comment (write to file first to avoid escaping issues)
+            printf "%b" "$INJECTION_COMMENT" > "injection_comment_${ISSUE_NUMBER}.md"
+            gh issue comment "$ISSUE_NUMBER" --body-file "injection_comment_${ISSUE_NUMBER}.md" || echo "Failed to post injection comment"
+            
+            # Skip analysis for high/critical risk
+            if [ "$RISK_LEVEL" = "critical" ] || [ "$RISK_LEVEL" = "high" ]; then
+              echo "SECURITY: Skipping analysis for issue #$ISSUE_NUMBER due to $RISK_LEVEL risk"
+              continue
+            fi
+            
+            # ==================== DUPLICATE CHECK ====================
+            echo ""
+            echo ">>> Step 2: Checking for duplicates..."
+            
+            # Create JSON file with previously analyzed issues
+            ANALYZED_COUNT=$(jq 'length' analyzed_issues.json)
+            echo "Comparing against $ANALYZED_COUNT previously analyzed issues..."
+            
+            IS_DUPLICATE="false"
+            if [ "$ANALYZED_COUNT" -gt 0 ]; then
+              # Create issues list for duplicate check
+              jq '[.[] | {issue_id: .number, title: .title, description: .body, status: "open", url: .html_url}]' analyzed_issues.json > ai-triage/existing_issues_analyzed.json
+              
+              cd ai-triage
+              if python -m cli.duplicate_check --title "$ISSUE_TITLE" --description "$ISSUE_BODY" --issues existing_issues_analyzed.json --output json > "duplicate_result_${ISSUE_NUMBER}.json" 2>&1; then
+                IS_DUPLICATE=$(jq -r '.is_duplicate // false' "duplicate_result_${ISSUE_NUMBER}.json")
+                echo "Duplicate check result: $IS_DUPLICATE"
+                
+                if [ "$IS_DUPLICATE" = "true" ]; then
+                  DUPLICATE_OF=$(jq -r '.duplicate_of.issue_id' "duplicate_result_${ISSUE_NUMBER}.json")
+                  CONFIDENCE=$(jq -r '.confidence_score // 0' "duplicate_result_${ISSUE_NUMBER}.json")
+                  REASONING=$(jq -r '.reasoning // "Similar issue detected"' "duplicate_result_${ISSUE_NUMBER}.json")
+                  
+                  echo "Issue #$ISSUE_NUMBER is a DUPLICATE of issue #$DUPLICATE_OF"
+                  
+                  # Add duplicate label
+                  cd ..
+                  gh issue edit "$ISSUE_NUMBER" --add-label "duplicate" || echo "Failed to add duplicate label"
+                  
+                  # Post duplicate comment
+                  CONFIDENCE_PERCENT=$(echo "scale=0; $CONFIDENCE * 100 / 1" | bc)
+                  DUP_COMMENT="## Duplicate Issue Detected\n\nThis issue appears to be a duplicate of #${DUPLICATE_OF}.\n\n"
+                  DUP_COMMENT="${DUP_COMMENT}**Confidence Score:** ${CONFIDENCE_PERCENT}%\n\n"
+                  DUP_COMMENT="${DUP_COMMENT}**Reasoning:** $REASONING\n\n"
+                  DUP_COMMENT="${DUP_COMMENT}Please review the original issue before continuing with this one.\n\n"
+                  DUP_COMMENT="${DUP_COMMENT}---\n*This check was performed during bulk analysis.*"
+                  
+                  # Post comment (write to file first to avoid escaping issues)
+                  printf "%b" "$DUP_COMMENT" > "duplicate_comment_${ISSUE_NUMBER}.md"
+                  gh issue comment "$ISSUE_NUMBER" --body-file "duplicate_comment_${ISSUE_NUMBER}.md" || echo "Failed to post duplicate comment"
+                  
+                  echo "Skipping full AI analysis for duplicate issue"
+                  continue
+                fi
+              else
+                echo "Duplicate detection failed, assuming not duplicate"
+                IS_DUPLICATE="false"
+              fi
+              cd ..
+            else
+              echo "No previously analyzed issues to compare against (first issue)"
+            fi
+            
+            # ==================== AI ANALYSIS ====================
+            echo ""
+            echo ">>> Step 3: Running AI analysis..."
+            
+            # Add this issue to analyzed list
+            jq --arg num "$ISSUE_NUMBER" --arg title "$ISSUE_TITLE" --arg body "$ISSUE_BODY" --arg url "$(echo "$ISSUE_DATA" | jq -r '.html_url')" \
+              '. += [{number: ($num | tonumber), title: $title, body: $body, html_url: $url}]' \
+              analyzed_issues.json > analyzed_issues_tmp.json
+            mv analyzed_issues_tmp.json analyzed_issues.json
+            echo "Added issue #$ISSUE_NUMBER to analyzed list (total: $(jq 'length' analyzed_issues.json))"
+            
+            cd ai-triage
+            
+            # Build CLI arguments
+            CLI_ARGS="--title \"$ISSUE_TITLE\" --description \"$ISSUE_BODY\" --source-path \"$(basename $REPOMIX_OUTPUT)\""
+            
+            if [ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ] && [ -f "../$CUSTOM_PROMPT_PATH" ]; then
+              CLI_ARGS="$CLI_ARGS --custom-prompt \"../$CUSTOM_PROMPT_PATH\""
+            fi
+            
+            # Run analysis (JSON format)
+            echo "Running analysis..."
+            eval "python -m cli.analyze $CLI_ARGS --format json --output analysis_result_${ISSUE_NUMBER}.json --quiet" || {
+              echo "ERROR: Analysis failed for issue #$ISSUE_NUMBER"
+              cd ..
+              continue
+            }
+            
+            # Run analysis (text format)
+            eval "python -m cli.analyze $CLI_ARGS --format text --output analysis_result_${ISSUE_NUMBER}.txt --quiet" || {
+              echo "ERROR: Text analysis failed for issue #$ISSUE_NUMBER"
+              cd ..
+              continue
+            }
+            
+            echo "Analysis completed successfully"
+            
+            # Read analysis results
+            ANALYSIS_TEXT=$(cat "analysis_result_${ISSUE_NUMBER}.txt")
+            
+            cd ..
+            
+            # Post analysis comment (write to file first to avoid escaping issues)
+            printf "## Updated AI Analysis\n\n*This analysis was updated following recent changes to the codebase.*\n\n%s" "$ANALYSIS_TEXT" > "analysis_comment_${ISSUE_NUMBER}.md"
+            gh issue comment "$ISSUE_NUMBER" --body-file "analysis_comment_${ISSUE_NUMBER}.md" || echo "Failed to post analysis comment"
+            
+            # Update labels
+            if [ -f "ai-triage/analysis_result_${ISSUE_NUMBER}.json" ]; then
+              ISSUE_TYPE=$(jq -r '.issue_type // ""' "ai-triage/analysis_result_${ISSUE_NUMBER}.json")
+              SEVERITY=$(jq -r '.severity // ""' "ai-triage/analysis_result_${ISSUE_NUMBER}.json")
+              
+              LABELS_TO_ADD="gemini-analyzed"
+              if [ -n "$ISSUE_TYPE" ] && [ "$ISSUE_TYPE" != "null" ]; then
+                LABELS_TO_ADD="${LABELS_TO_ADD},type:${ISSUE_TYPE}"
+              fi
+              if [ -n "$SEVERITY" ] && [ "$SEVERITY" != "null" ]; then
+                LABELS_TO_ADD="${LABELS_TO_ADD},severity:${SEVERITY}"
+              fi
+              
+              gh issue edit "$ISSUE_NUMBER" --add-label "$LABELS_TO_ADD" || echo "Failed to update labels"
+            fi
+            
+            echo "Issue #$ISSUE_NUMBER processed successfully"
+            
+          done < issue_numbers.txt
+          
+          echo ""
+          echo "================================================================"
+          echo "Bulk analysis completed! Processed $ISSUE_COUNT issues."
+          echo "================================================================"

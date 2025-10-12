@@ -39,8 +39,25 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 
 ## Setup
 
-### 1. Install Dependencies
+### 1. Install the Package
 
+The easiest way to get started is to install the package:
+
+```bash
+# Clone the repository
+git clone https://github.com/shvenkat-rh/AI-Issue-Triage.git
+cd AI-Issue-Triage
+
+# Install in development mode (editable)
+pip install -e .
+```
+
+This will:
+- Install all dependencies
+- Make the `utils` package importable
+- Install CLI commands: `ai-triage`, `ai-triage-duplicate`, `ai-triage-cosine`
+
+**Alternative** (manual dependency installation):
 ```bash
 pip install -r requirements.txt
 ```
@@ -90,9 +107,9 @@ The AI Issue Triage system can be used in multiple ways:
 The most powerful way to use this system is through automated GitHub Actions workflows. The system provides:
 
 - **Single Issue Analysis**: Analyzes each new issue as it's created
-- **Bulk Issue Analysis**: Re-analyzes all open issues when code changes
+- **Bulk Issue Analysis**: Re-analyzes all open issues when code changes (with smart duplicate detection)
 - **Security Checks**: Built-in prompt injection detection
-- **Duplicate Detection**: Identifies similar/duplicate issues
+- **Duplicate Detection**: Identifies similar/duplicate issues automatically
 
 #### Quick Setup
 
@@ -106,7 +123,7 @@ For detailed step-by-step instructions, **see the [QUICKSTART Guide](cutlery/QUI
 
 #### How It Works
 
-When a new issue is opened in your repository, the workflow automatically:
+**Single Issue Analysis** - When a new issue is opened:
 
 1. **Security Check**: Scans for prompt injection attempts to protect the AI system
 2. **Duplicate Detection**: Compares against existing issues to identify duplicates
@@ -114,12 +131,32 @@ When a new issue is opened in your repository, the workflow automatically:
 4. **Auto-Labeling**: Adds appropriate labels based on issue type and severity
 5. **Comment Generation**: Posts detailed analysis results as issue comments
 
+**Bulk Issue Analysis** - When a PR is merged to main:
+
+1. Fetches all open issues (sorted oldest → newest for canonical duplicate handling)
+2. For each issue in sequential order:
+   - **Prompt Injection Check**: Scans and posts security report comment
+   - **Duplicate Detection**: Compares against previously analyzed issues in this run
+     - If duplicate: adds label, posts duplicate comment with confidence score, skips AI analysis
+   - **AI Analysis**: Re-analyzes with updated codebase (only if not duplicate and safe)
+     - Posts "Updated AI Analysis" comment with fresh insights
+3. Automatically labels and comments on all issues
+
+> **Note**: Bulk analysis is efficient - duplicates and high-risk issues skip expensive AI analysis, saving API calls and time.
+
 #### Workflow Features
 
 - **Security Protection**: Automatically detects and flags malicious prompt injection attempts
-- **Duplicate Detection**: Identifies similar issues and prevents redundant analysis
-- **Smart Labeling**: Adds labels like `type:bug`, `severity:high`, `gemini-analyzed`
-- **Detailed Comments**: Posts comprehensive analysis directly to GitHub issues
+- **Smart Duplicate Detection**: 
+  - Single issue workflow: checks against all existing open issues
+  - Bulk analysis workflow: processes oldest → newest, comparing each against previously analyzed in the same run
+  - Older issues become "canonical" references for newer duplicates
+  - Duplicates are marked and skipped to save API calls
+- **Smart Labeling**: Adds labels like `type:bug`, `severity:high`, `gemini-analyzed`, `duplicate`, `security-alert`
+- **Comprehensive Comments**: Posts three types of comments:
+  - Prompt injection security reports (all issues)
+  - Duplicate detection results (when duplicates found)
+  - Updated AI analysis (non-duplicate, safe issues)
 - **Artifact Storage**: Saves analysis results and debug logs for review
 - **Fast Processing**: Uses latest Gemini 2.0 Flash model for quick analysis
 
@@ -167,7 +204,7 @@ The workflow generates several artifacts for debugging and audit purposes:
 > **⚠️ Note**: The Streamlit web interface is currently under development and not recommended for production use.
 
 ```bash
-streamlit run app.py
+streamlit run ui/streamlit_app.py
 ```
 
 This will open a web interface where you can:
@@ -190,36 +227,43 @@ This will open a web interface where you can:
 
 ### 3. Command Line Interface (CLI) - Scripting & Automation
 
-The analyzer also provides a powerful command-line interface for automation and scripting:
+The analyzer provides a powerful command-line interface for automation and scripting.
 
 #### Quick Start
+
+**Using installed commands** (after `pip install -e .`):
 ```bash
 # Interactive mode - prompts for title and description
-python cli.py
+ai-triage
 
 # Direct analysis
-python cli.py --title "Login bug" --description "Users can't login on mobile devices"
+ai-triage --title "Login bug" --description "Users can't login on mobile devices"
 
 # Analyze from file
-python cli.py --file sample_issue.txt
+ai-triage --file sample_issue.txt
 
 # Use custom source of truth file
-python cli.py --title "Bug" --description "Description" --source-path /path/to/my-codebase.txt
+ai-triage --title "Bug" --description "Description" --source-path /path/to/my-codebase.txt
 
 # Use custom prompt template
-python cli.py --title "Bug" --description "Description" --custom-prompt /path/to/custom_prompt.txt
+ai-triage --title "Bug" --description "Description" --custom-prompt /path/to/custom_prompt.txt
 
 # Save output to file
-python cli.py --title "Bug" --description "Description" --output analysis.txt
+ai-triage --title "Bug" --description "Description" --output analysis.txt
 
 # JSON output for automation
-python cli.py --title "Bug" --description "Description" --format json
+ai-triage --title "Bug" --description "Description" --format json
 
 # Quiet mode (no progress messages)
-python cli.py --quiet --title "Bug" --description "Description"
+ai-triage --quiet --title "Bug" --description "Description"
 
 # Configure retry attempts for better quality
-python cli.py --title "Bug" --description "Description" --retries 3
+ai-triage --title "Bug" --description "Description" --retries 3
+```
+
+**Alternative** (using Python module):
+```bash
+python -m cli.analyze --title "Bug" --description "Details"
 ```
 
 #### CLI Options
@@ -258,16 +302,22 @@ Include all relevant details.
 
 The project includes several specialized CLI tools for specific tasks:
 
-### 1. Duplicate Issue Detection (duplicate_cli.py)
+### 1. Duplicate Issue Detection
 
 Detect duplicate issues using AI-powered semantic analysis:
 
+**Using installed commands**:
 ```bash
 # Check if a new issue is duplicate
-python duplicate_cli.py --title "Issue title" --description "Issue details" --existing-issues issues.json
+ai-triage-duplicate --title "Issue title" --description "Issue details" --issues issues.json
 
 # Batch check multiple issues
-python duplicate_cli.py --file new-issues.json --existing-issues existing-issues.json
+ai-triage-duplicate --file new-issues.json --issues existing-issues.json
+```
+
+**Alternative** (using Python module):
+```bash
+python -m cli.duplicate_check --title "..." --description "..." --issues issues.json
 ```
 
 **Features**:
@@ -279,12 +329,18 @@ python duplicate_cli.py --file new-issues.json --existing-issues existing-issues
 
 ---
 
-### 2. Cosine Similarity Duplicate Detection (duplicate_cosine_cli.py)
+### 2. Cosine Similarity Duplicate Detection
 
 Alternative duplicate detection using TF-IDF and cosine similarity:
 
+**Using installed commands**:
 ```bash
-python duplicate_cosine_cli.py --title "Issue title" --description "Details" --existing-issues issues.json
+ai-triage-cosine --title "Issue title" --description "Details" --issues issues.json
+```
+
+**Alternative** (using Python module):
+```bash
+python -m cli.cosine_check --title "..." --description "..." --issues issues.json
 ```
 
 **Features**:
@@ -296,16 +352,18 @@ python duplicate_cosine_cli.py --title "Issue title" --description "Details" --e
 
 ---
 
-### 3. Prompt Injection Detection (prompt_injection.py)
+### 3. Prompt Injection Detection
 
 Security tool to detect malicious prompt injection attempts:
 
+**Using as a module**:
 ```bash
-# Direct usage
-python prompt_injection.py --text "Issue content to check"
+python -m utils.security.prompt_injection "title" "description"
+```
 
-# Or use as a library
-from prompt_injection import PromptInjectionDetector
+**Using as a library**:
+```python
+from utils.security import PromptInjectionDetector
 
 detector = PromptInjectionDetector()
 result = detector.detect("Issue content")
@@ -327,7 +385,14 @@ print(f"Risk Level: {result.risk_level}")
 You can also use the analyzer programmatically:
 
 ```python
-from gemini_analyzer import GeminiIssueAnalyzer
+# Import from the package
+from utils import GeminiIssueAnalyzer, IssueAnalysis, IssueType, Severity
+
+# Or import specific modules
+from utils.analyzer import GeminiIssueAnalyzer
+from utils.duplicate import CosineDuplicateAnalyzer, GeminiDuplicateAnalyzer
+from utils.models import IssueAnalysis, IssueType, Severity
+from utils.security import PromptInjectionDetector
 
 # Initialize analyzer with default source path
 analyzer = GeminiIssueAnalyzer(api_key="your-api-key")
@@ -338,7 +403,7 @@ analyzer = GeminiIssueAnalyzer(
     source_path="/path/to/your/codebase.txt"
 )
 
-# Note: The analyzer now uses the Google Gen AI SDK with gemini-2.0-flash-001
+# Note: The analyzer uses the Google Gen AI SDK with gemini-2.0-flash-001
 
 # Analyze an issue
 analysis = analyzer.analyze_issue(
@@ -349,6 +414,19 @@ analysis = analyzer.analyze_issue(
 print(f"Issue Type: {analysis.issue_type}")
 print(f"Severity: {analysis.severity}")
 print(f"Root Cause: {analysis.root_cause_analysis.primary_cause}")
+
+# Use duplicate detection
+duplicate_analyzer = CosineDuplicateAnalyzer()
+result = duplicate_analyzer.detect_duplicate(
+    new_issue_title="Bug title",
+    new_issue_description="Details",
+    existing_issues=[...]
+)
+
+# Use security detection
+security = PromptInjectionDetector()
+check = security.detect("User input text")
+print(f"Risk: {check.risk_level}")
 ```
 
 ## Source of Truth Configuration
@@ -364,10 +442,10 @@ You can specify a different source file using the `--source-path` option:
 
 ```bash
 # Use a custom codebase file
-python cli.py --source-path /path/to/my-project-dump.txt --title "Issue" --description "Details"
+ai-triage --source-path /path/to/my-project-dump.txt --title "Issue" --description "Details"
 
 # Use a file in a different directory
-python cli.py -s ../other-project/codebase.txt --title "Issue" --description "Details"
+ai-triage -s ../other-project/codebase.txt --title "Issue" --description "Details"
 ```
 
 ### Supported File Formats
@@ -416,7 +494,7 @@ Provide analysis in JSON format with security_risks field.
 
 ```bash
 # CLI usage
-python cli.py --title "Security Issue" --description "Details..." --custom-prompt my_prompt.txt
+ai-triage --title "Security Issue" --description "Details..." --custom-prompt my_prompt.txt
 
 # Web UI usage
 # Enter the path in the "Custom Prompt Path" field in the sidebar
@@ -507,13 +585,13 @@ The system automatically identifies responses that contain:
 
 ```bash
 # Default: 2 retries
-python cli.py --title "Issue" --description "Details"
+ai-triage --title "Issue" --description "Details"
 
 # Custom retry count
-python cli.py --title "Issue" --description "Details" --retries 3
+ai-triage --title "Issue" --description "Details" --retries 3
 
 # Disable retries
-python cli.py --title "Issue" --description "Details" --retries 0
+ai-triage --title "Issue" --description "Details" --retries 0
 ```
 
 ### Benefits
@@ -691,40 +769,55 @@ AI-Issue-Triage/
 │   └── workflows/
 │       ├── gemini-issue-analysis.yml  # Auto issue analysis workflow
 │       └── ci.yml                     # Combined CI workflow (tests + lint)
-├── tests/                      # Comprehensive test suite
+│
+├── utils/                      # 📦 Core Library Package
+│   ├── __init__.py            # Package exports
+│   ├── models.py              # Pydantic data models
+│   ├── analyzer.py            # Main issue analyzer
+│   ├── duplicate/             # Duplicate detection module
+│   │   ├── __init__.py
+│   │   ├── gemini_duplicate.py    # ✅ AI-powered duplicate detection
+│   │   └── cosine_duplicate.py    # 🚧 TF-IDF based detection (WIP)
+│   └── security/              # Security module
+│       ├── __init__.py
+│       └── prompt_injection.py    # ✅ Prompt injection detection
+│
+├── cli/                        # 🖥️ Command-Line Tools
 │   ├── __init__.py
-│   ├── conftest.py
-│   ├── test_models.py
-│   ├── test_gemini_analyzer.py
-│   ├── test_duplicate_analyzer.py
-│   └── test_cosine_duplicate_analyzer.py
-├── cutlery/                    # 🚀 Quick Start resources
+│   ├── analyze.py             # ✅ Main CLI (ai-triage)
+│   ├── duplicate_check.py     # ✅ Duplicate check CLI (ai-triage-duplicate)
+│   └── cosine_check.py        # 🚧 Cosine check CLI (ai-triage-cosine, WIP)
+│
+├── ui/                         # 🎨 User Interface
+│   ├── __init__.py
+│   ├── streamlit_app.py       # 🚧 Streamlit web UI (WIP)
+│   └── run_app.py             # Application runner
+│
+├── tests/                      # ✅ Comprehensive Test Suite
+│   ├── __init__.py
+│   ├── conftest.py            # Pytest configuration & fixtures
+│   ├── test_models.py         # Data models tests
+│   ├── test_gemini_analyzer.py        # Analyzer tests
+│   ├── test_duplicate_analyzer.py     # Duplicate detection tests
+│   └── test_cosine_duplicate_analyzer.py  # Cosine similarity tests
+│
+├── cutlery/                    # 🚀 Quick Start Resources
 │   ├── QUICKSTART.md          # Complete setup guide
 │   ├── workflows/             # GitHub Actions workflow templates
 │   ├── triage.config.json     # Example configuration
 │   └── samples/               # Sample files for testing
-├── Core Analysis
-│   ├── cli.py                 # ✅ Main CLI - Issue analysis
-│   ├── gemini_analyzer.py     # Core analyzer class
-│   ├── models.py              # Pydantic data models
-│   └── prompt_injection.py    # ✅ Security: Prompt injection detection
-├── Duplicate Detection
-│   ├── duplicate_cli.py       # ✅ CLI for AI duplicate detection
-│   ├── duplicate_analyzer.py  # Gemini-based duplicate detection
-│   ├── duplicate_cosine_cli.py # 🚧 CLI for cosine similarity (WIP)
-│   └── cosine_duplicate_analyzer.py # TF-IDF based detection
-├── Web Interface
-│   ├── app.py                 # 🚧 Streamlit UI (WIP)
-│   └── run_app.py             # Application runner
-├── Configuration & Testing
+│
+├── Configuration Files
+│   ├── setup.py               # Package installation config
+│   ├── requirements.txt       # Python dependencies
 │   ├── pytest.ini             # Pytest configuration
 │   ├── pyproject.toml         # Black, isort configuration
 │   ├── .flake8                # Flake8 linting configuration
-│   ├── run_tests.py           # Test runner with options
-│   ├── requirements.txt       # Python dependencies
 │   └── env_example.txt        # Environment variables template
+│
 └── Documentation & Samples
     ├── README.md              # This documentation
+    ├── run_tests.py           # Test runner with options
     ├── sample_issue.txt       # Example issue for testing
     └── sample_issues.json     # Sample issues data
 
@@ -732,6 +825,9 @@ Legend:
 ✅ = Stable and ready for production use
 🚧 = Work in progress, use with caution
 🚀 = Recommended starting point
+📦 = Pip-installable package
+🖥️ = Command-line interface
+🎨 = Web interface
 ```
 
 ## Contributing

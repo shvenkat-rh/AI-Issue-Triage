@@ -65,8 +65,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from gemini_analyzer import GeminiIssueAnalyzer
-from models import IssueType, Severity
+from utils.analyzer import GeminiIssueAnalyzer
+from utils.models import IssueType, Severity
 
 
 def clean_text(text: str) -> str:
@@ -332,31 +332,32 @@ def main():
         epilog="""
 Examples:
   # Interactive mode
-  python cli.py
+  ai-triage
+  # or: python -m cli.analyze
 
   # Direct analysis
-  python cli.py --title "Login bug" --description "Users can't login"
+  ai-triage --title "Login bug" --description "Users can't login"
 
   # From file
-  python cli.py --file issue.txt
+  ai-triage --file issue.txt
 
   # With custom source of truth
-  python cli.py --title "Bug" --description "Description" --source-path /path/to/codebase.txt
+  ai-triage --title "Bug" --description "Description" --source-path /path/to/codebase.txt
 
   # With custom prompt template
-  python cli.py --title "Bug" --description "Description" --custom-prompt /path/to/prompt.txt
+  ai-triage --title "Bug" --description "Description" --custom-prompt /path/to/prompt.txt
   
   # Configure retry attempts
-  python cli.py --title "Bug" --description "Description" --retries 3
+  ai-triage --title "Bug" --description "Description" --retries 3
 
   # Output to file
-  python cli.py --title "Bug" --description "Description" --output analysis.txt
+  ai-triage --title "Bug" --description "Description" --output analysis.txt
 
   # JSON output
-  python cli.py --title "Bug" --description "Description" --format json
+  ai-triage --title "Bug" --description "Description" --format json
 
   # Disable data cleaning (preserve raw input)
-  python cli.py --title "API key issue" --description "My key abc123..." --no-clean
+  ai-triage --title "API key issue" --description "My key abc123..." --no-clean
         """,
     )
 

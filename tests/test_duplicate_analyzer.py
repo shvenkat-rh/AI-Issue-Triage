@@ -5,8 +5,8 @@ from datetime import datetime
 
 import pytest
 
-from duplicate_analyzer import GeminiDuplicateAnalyzer
-from models import DuplicateDetectionResult, IssueReference
+from utils.duplicate.gemini_duplicate import GeminiDuplicateAnalyzer
+from utils.models import DuplicateDetectionResult, IssueReference
 
 
 @pytest.fixture

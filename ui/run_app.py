@@ -56,7 +56,7 @@ def run_streamlit():
     print("=" * 50)
 
     try:
-        subprocess.run([sys.executable, "-m", "streamlit", "run", "app.py"])
+        subprocess.run([sys.executable, "-m", "streamlit", "run", "ui/streamlit_app.py"])
     except KeyboardInterrupt:
         print("\nApplication stopped by user")
     except Exception as e:

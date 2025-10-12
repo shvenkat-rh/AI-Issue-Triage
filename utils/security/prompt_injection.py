@@ -9,7 +9,7 @@ methods and detailed reporting capabilities.
 import logging
 from typing import Dict, List, Optional, Tuple
 
-from models import InjectionResult, InjectionRisk
+from utils.models import InjectionResult, InjectionRisk
 
 try:
     import pytector
@@ -391,7 +391,7 @@ if __name__ == "__main__":
 
     # Check if we have command line arguments for CLI usage
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
-        # Simple CLI usage: python prompt_injection.py "title" "description" [--debug]
+        # Simple CLI usage: python -m utils.security.prompt_injection "title" "description" [--debug]
         debug_mode = "--debug" in sys.argv
 
         if len(sys.argv) >= 3:
@@ -468,7 +468,7 @@ if __name__ == "__main__":
                 print(json.dumps(error_result, indent=2))
                 sys.exit(1)
         else:
-            print("Usage: python prompt_injection.py <title> <description>", file=sys.stderr)
+            print("Usage: python -m utils.security.prompt_injection <title> <description>", file=sys.stderr)
             sys.exit(1)
 
     # Argument parser for more advanced CLI usage
