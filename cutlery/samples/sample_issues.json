@@ -1,0 +1,26 @@
+[
+  {
+    "issue_id": "ISSUE-001",
+    "title": "Login page crashes when clicking submit button",
+    "description": "When I click the submit button on the login page, the application crashes with a JavaScript error. The console shows 'TypeError: Cannot read property of undefined'. This happens in Chrome and Firefox.",
+    "status": "open",
+    "created_date": "2024-01-15",
+    "url": "https://github.com/example/repo/issues/1"
+  },
+  {
+    "issue_id": "ISSUE-002",
+    "title": "Database connection timeout in production",
+    "description": "The application frequently shows database connection timeout errors in production environment. This affects user authentication and data retrieval. Error occurs approximately every 30 minutes.",
+    "status": "open",
+    "created_date": "2024-01-20",
+    "url": "https://github.com/example/repo/issues/2"
+  },
+  {
+    "issue_id": "ISSUE-003",
+    "title": "User authentication module memory leak",
+    "description": "Memory usage continuously increases in the authentication service. After 24 hours of operation, memory usage reaches 2GB and the service becomes unresponsive.",
+    "status": "open",
+    "created_date": "2024-01-25",
+    "url": "https://github.com/example/repo/issues/3"
+  }
+]

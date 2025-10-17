@@ -1,0 +1,4 @@
+# Get your API key from https://makersuite.google.com/app/apikey
+# The new Google Gen AI SDK supports both GEMINI_API_KEY and GOOGLE_API_KEY
+GEMINI_API_KEY=your_gemini_api_key_here
+# Alternative: GOOGLE_API_KEY=your_gemini_api_key_here

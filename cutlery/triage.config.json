@@ -1,0 +1,15 @@
+{
+  "repository": {
+    "url": "https://github.com/ORG/REPO-NAME",
+    "description": "Target repository for AI issue analysis"
+  },
+  "repomix": {
+    "output_path": "repomix-output.txt",
+    "description": "Path where repomix output will be stored"
+  },
+  "analysis": {
+    "custom_prompt_path": "prompt.txt",
+    "description": "Path to custom prompt template file for AI analysis (leave empty to use default)"
+  }
+}
+

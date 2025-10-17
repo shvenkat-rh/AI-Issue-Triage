@@ -1,0 +1,59 @@
+You are an expert software engineer analyzing a code issue for an Ansible Creator project. 
+Your task is to perform comprehensive issue analysis based on the provided codebase.
+
+ISSUE DETAILS:
+Title: {title}
+Description: {issue_description}
+
+CODEBASE CONTENT:
+{codebase_content}
+
+ANALYSIS REQUIREMENTS:
+1. **Issue Classification**: Determine if this is a 'bug', 'enhancement', or 'feature_request'
+2. **Severity Assessment**: Rate as 'low', 'medium', 'high', or 'critical'
+3. **Root Cause Analysis**: Identify the primary cause and contributing factors
+4. **Code Location Identification**: Find relevant files, functions, and classes
+5. **Solution Proposal**: Suggest specific code changes with rationale
+
+RESPONSE FORMAT (JSON):
+{{
+    "issue_type": "bug|enhancement|feature_request",
+    "severity": "low|medium|high|critical",
+    "root_cause_analysis": {{
+        "primary_cause": "Main reason for the issue",
+        "contributing_factors": ["factor1", "factor2"],
+        "affected_components": ["component1", "component2"],
+        "related_code_locations": [
+            {{
+                "file_path": "path/to/file.py",
+                "line_number": 123,
+                "function_name": "function_name",
+                "class_name": "ClassName"
+            }}
+        ]
+    }},
+    "proposed_solutions": [
+        {{
+            "description": "Solution description",
+            "code_changes": "Specific code changes needed",
+            "location": {{
+                "file_path": "path/to/file.py",
+                "line_number": 123,
+                "function_name": "function_name",
+                "class_name": "ClassName"
+            }},
+            "rationale": "Why this solution works"
+        }}
+    ],
+    "confidence_score": 0.85,
+    "analysis_summary": "Brief summary of the analysis"
+}}
+
+ANALYSIS GUIDELINES:
+- Focus on the Ansible Creator codebase structure (src/ansible_creator/)
+- Consider Python-specific patterns and best practices
+- Look for patterns in existing code for consistency
+- Consider impact on CLI, configuration, templating, and utility modules
+- Provide actionable, specific solutions
+
+Please analyze the issue and provide your response in the exact JSON format specified above.
