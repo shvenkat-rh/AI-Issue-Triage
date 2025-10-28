@@ -77,10 +77,7 @@ class GeminiBatchIssueAnalyzer:
 
         # Submit batch job
         print(f"Submitting batch job with {len(issues)} issues...")
-        batch_job = self.client.batches.create(
-            model=self.model_name,
-            requests=batch_request
-        )
+        batch_job = self.client.batches.create(model=self.model_name, requests=batch_request)
 
         print(f"Batch job created with ID: {batch_job.name}")
         print("Waiting for batch processing to complete...")
@@ -119,9 +116,7 @@ class GeminiBatchIssueAnalyzer:
             prompt = self._create_analysis_prompt(title, description)
 
             request = {
-                "request": {
-                    "contents": [{"parts": [{"text": prompt}], "role": "user"}]
-                },
+                "request": {"contents": [{"parts": [{"text": prompt}], "role": "user"}]},
                 "task_id": f"issue_{i}",
             }
 
@@ -424,4 +419,3 @@ Please analyze the issue and provide your response in the exact JSON format spec
             confidence_score=0.0,
             analysis_summary="Analysis failed - manual review needed",
         )
-

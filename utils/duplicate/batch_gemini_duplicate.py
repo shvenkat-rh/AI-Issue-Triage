@@ -70,10 +70,7 @@ class GeminiBatchDuplicateAnalyzer:
 
         # Submit batch job
         print(f"Submitting batch job with {len(new_issues)} issues...")
-        batch_job = self.client.batches.create(
-            model=self.model_name,
-            requests=batch_request
-        )
+        batch_job = self.client.batches.create(model=self.model_name, requests=batch_request)
 
         print(f"Batch job created with ID: {batch_job.name}")
         print("Waiting for batch processing to complete...")
@@ -111,9 +108,7 @@ class GeminiBatchDuplicateAnalyzer:
             prompt = self._create_duplicate_detection_prompt(title, description, existing_issues)
 
             request = {
-                "request": {
-                    "contents": [{"parts": [{"text": prompt}], "role": "user"}]
-                },
+                "request": {"contents": [{"parts": [{"text": prompt}], "role": "user"}]},
                 "task_id": f"duplicate_check_{i}",
             }
 
@@ -329,4 +324,3 @@ Please analyze the new issue and provide your response in the exact JSON format 
             confidence_score=0.0,
             recommendation=f"Unable to perform duplicate detection due to API error: {error_msg}. Manual review required.",
         )
-

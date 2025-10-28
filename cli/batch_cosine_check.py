@@ -75,21 +75,15 @@ Algorithm Details:
         """,
     )
 
-    parser.add_argument(
-        "--new-issues", type=Path, help="Path to JSON file containing new issues to check for duplicates"
-    )
+    parser.add_argument("--new-issues", type=Path, help="Path to JSON file containing new issues to check for duplicates")
 
-    parser.add_argument(
-        "--existing-issues", type=Path, help="Path to JSON file containing existing issues"
-    )
+    parser.add_argument("--existing-issues", type=Path, help="Path to JSON file containing existing issues")
 
     parser.add_argument(
         "--create-sample-existing", type=Path, metavar="FILE", help="Create a sample existing issues JSON file"
     )
 
-    parser.add_argument(
-        "--create-sample-new", type=Path, metavar="FILE", help="Create a sample new issues JSON file"
-    )
+    parser.add_argument("--create-sample-new", type=Path, metavar="FILE", help="Create a sample new issues JSON file")
 
     parser.add_argument(
         "--validate-issues", type=Path, metavar="FILE", help="Validate and show the format of an issues JSON file"
@@ -106,9 +100,7 @@ Algorithm Details:
         help="Confidence threshold for high-confidence results (default: 0.6)",
     )
 
-    parser.add_argument(
-        "--show-similar", type=int, metavar="N", help="Show top N most similar issues for each new issue"
-    )
+    parser.add_argument("--show-similar", type=int, metavar="N", help="Show top N most similar issues for each new issue")
 
     parser.add_argument("--output", type=Path, help="Output file (default: stdout)")
 
@@ -155,8 +147,7 @@ def run_batch_duplicate_detection(args):
         if not args.quiet:
             print("Initializing cosine similarity batch duplicate analyzer...")
         analyzer = CosineBatchDuplicateAnalyzer(
-            similarity_threshold=args.threshold,
-            confidence_threshold=args.confidence_threshold
+            similarity_threshold=args.threshold, confidence_threshold=args.confidence_threshold
         )
 
         # Load existing issues
@@ -210,7 +201,7 @@ def run_batch_duplicate_detection(args):
 def output_text_batch(results, new_issues, similar_issues_batch, output_file, quiet):
     """Output batch results in text format."""
     output_lines = []
-    
+
     output_lines.append("COSINE SIMILARITY BATCH DUPLICATE DETECTION RESULTS")
     output_lines.append("=" * 80)
     output_lines.append(f"Analyzed {len(results)} issues")
@@ -288,7 +279,7 @@ def output_json_batch(results, new_issues, similar_issues_batch, output_file, qu
             "unique_issues": sum(1 for r in results if not r.is_duplicate),
             "timestamp": datetime.now().isoformat(),
         },
-        "results": []
+        "results": [],
     }
 
     for i, (result, new_issue) in enumerate(zip(results, new_issues)):
@@ -347,4 +338,3 @@ def output_json_batch(results, new_issues, similar_issues_batch, output_file, qu
 
 if __name__ == "__main__":
     main()
-

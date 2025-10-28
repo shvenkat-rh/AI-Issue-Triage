@@ -197,8 +197,7 @@ class CosineBatchDuplicateAnalyzer:
         try:
             # Prepare texts for all new issues
             new_issue_texts = [
-                self._combine_new_issue_text(issue.get("title", ""), issue.get("description", ""))
-                for issue in new_issues
+                self._combine_new_issue_text(issue.get("title", ""), issue.get("description", "")) for issue in new_issues
             ]
 
             # Prepare texts for existing issues
@@ -305,8 +304,7 @@ class CosineBatchDuplicateAnalyzer:
         try:
             # Prepare texts for all new issues
             new_issue_texts = [
-                self._combine_new_issue_text(issue.get("title", ""), issue.get("description", ""))
-                for issue in new_issues
+                self._combine_new_issue_text(issue.get("title", ""), issue.get("description", "")) for issue in new_issues
             ]
 
             # Prepare texts for existing issues
@@ -346,4 +344,3 @@ class CosineBatchDuplicateAnalyzer:
 
         except Exception:
             return [[] for _ in new_issues]
-

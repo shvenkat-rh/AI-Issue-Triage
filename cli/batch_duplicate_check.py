@@ -39,10 +39,7 @@ def load_new_issues_from_file(file_path: Path) -> List[dict]:
                 print(f"ERROR: Issue {i+1} missing required field 'description'", file=sys.stderr)
                 sys.exit(1)
 
-            issues.append({
-                "title": str(item["title"]),
-                "description": str(item["description"])
-            })
+            issues.append({"title": str(item["title"]), "description": str(item["description"])})
 
         return issues
 
@@ -62,16 +59,16 @@ def create_sample_new_issues_file(file_path: Path):
     sample_issues = [
         {
             "title": "Submit button not working on login form",
-            "description": "Users report that clicking the submit button on the login form doesn't work. The page doesn't respond and no error is shown."
+            "description": "Users report that clicking the submit button on the login form doesn't work. The page doesn't respond and no error is shown.",
         },
         {
             "title": "Database timeout errors during peak hours",
-            "description": "During high traffic periods, the database connection times out frequently. This causes authentication failures."
+            "description": "During high traffic periods, the database connection times out frequently. This causes authentication failures.",
         },
         {
             "title": "New feature request: Dark mode",
-            "description": "Users are requesting a dark mode for the application to reduce eye strain during night time usage."
-        }
+            "description": "Users are requesting a dark mode for the application to reduce eye strain during night time usage.",
+        },
     ]
 
     with open(file_path, "w", encoding="utf-8") as f:
@@ -123,21 +120,15 @@ Supported JSON formats:
         """,
     )
 
-    parser.add_argument(
-        "--new-issues", type=Path, help="Path to JSON file containing new issues to check for duplicates"
-    )
+    parser.add_argument("--new-issues", type=Path, help="Path to JSON file containing new issues to check for duplicates")
 
-    parser.add_argument(
-        "--existing-issues", type=Path, help="Path to JSON file containing existing issues"
-    )
+    parser.add_argument("--existing-issues", type=Path, help="Path to JSON file containing existing issues")
 
     parser.add_argument(
         "--create-sample-existing", type=Path, metavar="FILE", help="Create a sample existing issues JSON file"
     )
 
-    parser.add_argument(
-        "--create-sample-new", type=Path, metavar="FILE", help="Create a sample new issues JSON file"
-    )
+    parser.add_argument("--create-sample-new", type=Path, metavar="FILE", help="Create a sample new issues JSON file")
 
     parser.add_argument(
         "--validate-issues", type=Path, metavar="FILE", help="Validate and show the format of an issues JSON file"
@@ -201,11 +192,7 @@ def run_batch_duplicate_detection(args):
         # Perform batch duplicate detection
         if not args.quiet:
             print(f"Checking for duplicates in batch mode...")
-        results = analyzer.batch_detect_duplicates(
-            new_issues, 
-            existing_issues,
-            poll_interval=args.poll_interval
-        )
+        results = analyzer.batch_detect_duplicates(new_issues, existing_issues, poll_interval=args.poll_interval)
 
         # Output results
         if args.format == "json":
@@ -234,7 +221,7 @@ def run_batch_duplicate_detection(args):
 def output_text_batch(results, new_issues, output_file, quiet):
     """Output batch results in text format."""
     output_lines = []
-    
+
     output_lines.append("GEMINI BATCH DUPLICATE DETECTION RESULTS")
     output_lines.append("=" * 80)
     output_lines.append(f"Analyzed {len(results)} issues")
@@ -297,7 +284,7 @@ def output_json_batch(results, new_issues, output_file, quiet):
             "unique_issues": sum(1 for r in results if not r.is_duplicate),
             "timestamp": datetime.now().isoformat(),
         },
-        "results": []
+        "results": [],
     }
 
     for result, new_issue in zip(results, new_issues):
@@ -341,4 +328,3 @@ def output_json_batch(results, new_issues, output_file, quiet):
 
 if __name__ == "__main__":
     main()
-

@@ -97,10 +97,7 @@ def load_issues_from_file(file_path: Path) -> List[dict]:
                 print(f"ERROR: Issue {i+1} missing required field 'description'", file=sys.stderr)
                 sys.exit(1)
 
-            issues.append({
-                "title": str(item["title"]),
-                "description": str(item["description"])
-            })
+            issues.append({"title": str(item["title"]), "description": str(item["description"])})
 
         return issues
 
@@ -120,16 +117,16 @@ def create_sample_issues_file(file_path: Path):
     sample_issues = [
         {
             "title": "Login page crashes when clicking submit button",
-            "description": "When I click the submit button on the login page, the application crashes with a JavaScript error. The console shows 'TypeError: Cannot read property of undefined'. This happens in Chrome and Firefox."
+            "description": "When I click the submit button on the login page, the application crashes with a JavaScript error. The console shows 'TypeError: Cannot read property of undefined'. This happens in Chrome and Firefox.",
         },
         {
             "title": "Database connection timeout in production",
-            "description": "The application frequently shows database connection timeout errors in production environment. This affects user authentication and data retrieval. Error occurs approximately every 30 minutes."
+            "description": "The application frequently shows database connection timeout errors in production environment. This affects user authentication and data retrieval. Error occurs approximately every 30 minutes.",
         },
         {
             "title": "User authentication module memory leak",
-            "description": "Memory usage continuously increases in the authentication service. After 24 hours of operation, memory usage reaches 2GB and the service becomes unresponsive."
-        }
+            "description": "Memory usage continuously increases in the authentication service. After 24 hours of operation, memory usage reaches 2GB and the service becomes unresponsive.",
+        },
     ]
 
     with open(file_path, "w", encoding="utf-8") as f:
@@ -173,13 +170,9 @@ Examples:
     )
 
     # Input options
-    parser.add_argument(
-        "--issues-file", "-f", type=Path, help="JSON file containing list of issues to analyze"
-    )
+    parser.add_argument("--issues-file", "-f", type=Path, help="JSON file containing list of issues to analyze")
 
-    parser.add_argument(
-        "--create-sample", type=Path, help="Create a sample issues JSON file at the specified path"
-    )
+    parser.add_argument("--create-sample", type=Path, help="Create a sample issues JSON file at the specified path")
 
     # Output options
     parser.add_argument("--output", "-o", type=Path, help="Output file (default: stdout)")
@@ -247,11 +240,7 @@ Examples:
         if not args.quiet:
             print(f"Analyzing {len(issues)} issues in batch mode...")
 
-        analyses = analyzer.batch_analyze_issues(
-            issues, 
-            max_retries=args.retries,
-            poll_interval=args.poll_interval
-        )
+        analyses = analyzer.batch_analyze_issues(issues, max_retries=args.retries, poll_interval=args.poll_interval)
 
         if not args.quiet:
             print("Analysis complete!")
@@ -290,4 +279,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-
