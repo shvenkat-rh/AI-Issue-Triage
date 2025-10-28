@@ -8,12 +8,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from utils.duplicate.batch_cosine_duplicate import CosineBatchDuplicateAnalyzer
-from utils.models import IssueReference
+from cli.batch_duplicate_check import create_sample_new_issues_file, load_new_issues_from_file
 
 # Import utility functions from cosine_check.py and batch_duplicate_check.py
-from cli.cosine_check import load_issues_from_file, create_sample_issues_file, validate_issues_file
-from cli.batch_duplicate_check import load_new_issues_from_file, create_sample_new_issues_file
+from cli.cosine_check import create_sample_issues_file, load_issues_from_file, validate_issues_file
+from utils.duplicate.batch_cosine_duplicate import CosineBatchDuplicateAnalyzer
+from utils.models import IssueReference
 
 
 def main():

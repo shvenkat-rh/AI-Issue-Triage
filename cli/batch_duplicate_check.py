@@ -8,11 +8,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
+# Import utility functions from duplicate_check.py
+from cli.duplicate_check import create_sample_issues_file, load_issues_from_file, validate_issues_file
 from utils.duplicate.batch_gemini_duplicate import GeminiBatchDuplicateAnalyzer
 from utils.models import IssueReference
-
-# Import utility functions from duplicate_check.py
-from cli.duplicate_check import load_issues_from_file, create_sample_issues_file, validate_issues_file
 
 
 def load_new_issues_from_file(file_path: Path) -> List[dict]:

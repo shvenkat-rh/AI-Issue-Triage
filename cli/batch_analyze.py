@@ -66,11 +66,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+# Import cleaning functions from analyze.py
+from cli.analyze import clean_issue_data, clean_text, format_analysis_text, mask_emails, mask_ip_addresses, mask_secrets
 from utils.batch_analyzer import GeminiBatchIssueAnalyzer
 from utils.models import IssueType, Severity
-
-# Import cleaning functions from analyze.py
-from cli.analyze import clean_text, mask_secrets, mask_emails, mask_ip_addresses, clean_issue_data, format_analysis_text
 
 
 def load_issues_from_file(file_path: Path) -> List[dict]:
