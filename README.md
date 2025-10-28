@@ -25,6 +25,7 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 ## Features
 
 - **AI-Powered Analysis**: Uses Google Gemini 2.0 Flash for intelligent issue analysis with the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/)
+- **Batch Processing** 🚀 **NEW**: Efficiently process multiple issues using Gemini Batch API with lower costs and parallel processing
 - **Root Cause Analysis**: Identifies primary causes and contributing factors
 - **Solution Generation**: Proposes specific code changes with rationale
 - **Issue Triage**: Automatically classifies issues as bugs, enhancements, or feature requests
@@ -34,7 +35,7 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 - **Enhanced Performance**: Faster analysis with the latest Gemini 2.0 Flash model
 - **Smart Retry Mechanism**: Automatically retries analysis if low-quality responses are detected
 - **Security Protection**: Built-in prompt injection detection to protect against malicious inputs
-- **Duplicate Detection**: Automatically identifies and flags duplicate issues
+- **Duplicate Detection**: Automatically identifies and flags duplicate issues (single and batch modes)
 - **GitHub Actions Integration**: Automated issue analysis workflow for GitHub repositories
 
 ## Setup
@@ -302,7 +303,54 @@ Include all relevant details.
 
 The project includes several specialized CLI tools for specific tasks:
 
-### 1. Duplicate Issue Detection
+### 1. Batch Processing Tools 🚀 **NEW**
+
+Process multiple issues efficiently using Gemini Batch API or optimized algorithms:
+
+**📖 For complete documentation, see [Batch Processing CLI Tools in QUICKSTART](cutlery/QUICKSTART.md#batch-processing-cli-tools-)**
+
+#### Batch Issue Analysis
+Analyze multiple issues in a single batch operation:
+```bash
+# Create sample issues file
+python -m cli.batch_analyze --create-sample issues.json
+
+# Batch analyze issues
+python -m cli.batch_analyze --issues-file issues.json --output results.json
+```
+
+#### Batch Duplicate Detection (Gemini)
+Check multiple issues for duplicates using AI:
+```bash
+python -m cli.batch_duplicate_check \
+  --new-issues new_issues.json \
+  --existing-issues existing_issues.json \
+  --output results.json
+```
+
+#### Batch Duplicate Detection (Cosine Similarity)
+Fast local duplicate checking for multiple issues:
+```bash
+python -m cli.batch_cosine_check \
+  --new-issues new_issues.json \
+  --existing-issues existing_issues.json \
+  --threshold 0.8 \
+  --show-similar 5
+```
+
+**Key Benefits**:
+- **Cost Efficient**: Lower API costs with batch processing
+- **Faster**: Process multiple issues in parallel
+- **Scalable**: Handle hundreds of issues efficiently
+- **Same Quality**: Maintains analysis quality with automatic retries
+
+**Status**: ✅ Stable and ready for production use
+
+See [Batch Processing CLI Tools in QUICKSTART](cutlery/QUICKSTART.md#batch-processing-cli-tools-) for detailed usage, input formats, and examples.
+
+---
+
+### 2. Duplicate Issue Detection (Single)
 
 Detect duplicate issues using AI-powered semantic analysis:
 
@@ -310,9 +358,6 @@ Detect duplicate issues using AI-powered semantic analysis:
 ```bash
 # Check if a new issue is duplicate
 ai-triage-duplicate --title "Issue title" --description "Issue details" --issues issues.json
-
-# Batch check multiple issues
-ai-triage-duplicate --file new-issues.json --issues existing-issues.json
 ```
 
 **Alternative** (using Python module):
@@ -329,7 +374,7 @@ python -m cli.duplicate_check --title "..." --description "..." --issues issues.
 
 ---
 
-### 2. Cosine Similarity Duplicate Detection
+### 3. Cosine Similarity Duplicate Detection
 
 Alternative duplicate detection using TF-IDF and cosine similarity:
 
@@ -352,7 +397,7 @@ python -m cli.cosine_check --title "..." --description "..." --issues issues.jso
 
 ---
 
-### 3. Prompt Injection Detection
+### 4. Prompt Injection Detection
 
 Security tool to detect malicious prompt injection attempts:
 
@@ -390,7 +435,10 @@ from utils import GeminiIssueAnalyzer, IssueAnalysis, IssueType, Severity
 
 # Or import specific modules
 from utils.analyzer import GeminiIssueAnalyzer
+from utils.batch_analyzer import GeminiBatchIssueAnalyzer  # 🚀 NEW: Batch processing
 from utils.duplicate import CosineDuplicateAnalyzer, GeminiDuplicateAnalyzer
+from utils.duplicate.batch_gemini_duplicate import GeminiBatchDuplicateAnalyzer  # 🚀 NEW
+from utils.duplicate.batch_cosine_duplicate import CosineBatchDuplicateAnalyzer  # 🚀 NEW
 from utils.models import IssueAnalysis, IssueType, Severity
 from utils.security import PromptInjectionDetector
 
@@ -427,6 +475,22 @@ result = duplicate_analyzer.detect_duplicate(
 security = PromptInjectionDetector()
 check = security.detect("User input text")
 print(f"Risk: {check.risk_level}")
+
+# 🚀 NEW: Use batch processing for multiple issues
+batch_analyzer = GeminiBatchIssueAnalyzer(api_key="your-api-key")
+issues = [
+    {"title": "Issue 1", "description": "Details 1"},
+    {"title": "Issue 2", "description": "Details 2"}
+]
+analyses = batch_analyzer.batch_analyze_issues(issues, poll_interval=10)
+
+# Batch duplicate detection
+batch_dup_analyzer = GeminiBatchDuplicateAnalyzer(api_key="your-api-key")
+results = batch_dup_analyzer.batch_detect_duplicates(new_issues, existing_issues)
+
+# Batch cosine similarity (no API required, faster)
+batch_cosine = CosineBatchDuplicateAnalyzer(similarity_threshold=0.7)
+results = batch_cosine.batch_detect_duplicates(new_issues, existing_issues)
 ```
 
 ## Source of Truth Configuration
@@ -774,10 +838,13 @@ AI-Issue-Triage/
 │   ├── __init__.py            # Package exports
 │   ├── models.py              # Pydantic data models
 │   ├── analyzer.py            # Main issue analyzer
+│   ├── batch_analyzer.py      # 🚀 Batch issue analyzer (NEW)
 │   ├── duplicate/             # Duplicate detection module
 │   │   ├── __init__.py
-│   │   ├── gemini_duplicate.py    # ✅ AI-powered duplicate detection
-│   │   └── cosine_duplicate.py    # 🚧 TF-IDF based detection (WIP)
+│   │   ├── gemini_duplicate.py        # ✅ AI-powered duplicate detection
+│   │   ├── cosine_duplicate.py        # 🚧 TF-IDF based detection (WIP)
+│   │   ├── batch_gemini_duplicate.py  # 🚀 Batch AI duplicate detection (NEW)
+│   │   └── batch_cosine_duplicate.py  # 🚀 Batch cosine duplicate detection (NEW)
 │   └── security/              # Security module
 │       ├── __init__.py
 │       └── prompt_injection.py    # ✅ Prompt injection detection
@@ -786,7 +853,10 @@ AI-Issue-Triage/
 │   ├── __init__.py
 │   ├── analyze.py             # ✅ Main CLI (ai-triage)
 │   ├── duplicate_check.py     # ✅ Duplicate check CLI (ai-triage-duplicate)
-│   └── cosine_check.py        # 🚧 Cosine check CLI (ai-triage-cosine, WIP)
+│   ├── cosine_check.py        # 🚧 Cosine check CLI (ai-triage-cosine, WIP)
+│   ├── batch_analyze.py       # 🚀 Batch analysis CLI (NEW)
+│   ├── batch_duplicate_check.py  # 🚀 Batch Gemini duplicate CLI (NEW)
+│   └── batch_cosine_check.py     # 🚀 Batch cosine duplicate CLI (NEW)
 │
 ├── ui/                         # 🎨 User Interface
 │   ├── __init__.py
@@ -915,7 +985,8 @@ For issues and questions:
 
 ## 📚 Additional Resources
 
-- **[QUICKSTART Guide](cutlery/QUICKSTART.md)** - Complete setup guide for GitHub Actions workflows
+- **[QUICKSTART Guide](cutlery/QUICKSTART.md)** - Complete setup guide for GitHub Actions workflows and batch processing CLI tools
+- **[Batch Processing CLI Tools](cutlery/QUICKSTART.md#batch-processing-cli-tools-)** 🚀 **NEW** - Efficient batch processing for multiple issues
 - **[Test Examples](cutlery/samples/)** - Sample files for testing and configuration
 - **[Workflow Templates](cutlery/workflows/)** - Ready-to-use GitHub Actions workflows
 

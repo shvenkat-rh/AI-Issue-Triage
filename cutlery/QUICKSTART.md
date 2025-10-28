@@ -28,7 +28,9 @@ cutlery/
 - [Setup Steps](#setup-steps)
 - [Configuration](#configuration)
 - [Usage](#usage)
+- [Batch Processing CLI Tools](#batch-processing-cli-tools-)
 - [Customization](#customization)
+- [Advanced Configuration](#advanced-configuration)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -407,6 +409,224 @@ Every issue receives at least one comment:
 - When issue context changes
 - Periodic re-analysis of open issues
 - Cleaning up duplicate issues automatically
+
+---
+
+## Batch Processing CLI Tools 🚀
+
+In addition to the automated GitHub Actions workflows, the AI-Issue-Triage system provides **batch processing CLI tools** for efficiently analyzing multiple issues at once. These tools are ideal for:
+
+- **One-time bulk analysis** of existing issues
+- **Offline processing** without GitHub Actions
+- **Custom integrations** with your own scripts
+- **Cost optimization** through Gemini Batch API
+
+### Available Batch Tools
+
+#### 1. Batch Issue Analysis
+
+Analyze multiple issues in a single operation using Gemini Batch API:
+
+```bash
+# Create a sample issues file
+python -m cli.batch_analyze --create-sample issues.json
+
+# Analyze multiple issues from JSON file
+python -m cli.batch_analyze --issues-file issues.json --output results.json
+```
+
+**Input Format** (`issues.json`):
+```json
+[
+  {
+    "title": "Login page crashes",
+    "description": "When I click submit, the app crashes"
+  },
+  {
+    "title": "Database timeout",
+    "description": "Connection times out after 30 seconds"
+  }
+]
+```
+
+**Key Options**:
+- `--source-path`: Path to codebase file (default: `repomix-output.txt`)
+- `--custom-prompt`: Path to custom prompt template
+- `--poll-interval`: Seconds between status checks (default: 10)
+- `--retries`: Max retry attempts for low-quality responses (default: 2)
+- `--format`: Output format `text` or `json` (default: `json`)
+
+#### 2. Batch Duplicate Detection (Gemini AI)
+
+Check multiple issues for duplicates using AI-powered semantic analysis:
+
+```bash
+# Create sample files
+python -m cli.batch_duplicate_check --create-sample-existing existing_issues.json
+python -m cli.batch_duplicate_check --create-sample-new new_issues.json
+
+# Check for duplicates in batch
+python -m cli.batch_duplicate_check \
+  --new-issues new_issues.json \
+  --existing-issues existing_issues.json \
+  --output results.json
+```
+
+**Input Format** (`new_issues.json`):
+```json
+[
+  {
+    "title": "Submit button not working",
+    "description": "The submit button doesn't respond"
+  }
+]
+```
+
+**Input Format** (`existing_issues.json`):
+```json
+[
+  {
+    "issue_id": "ISSUE-001",
+    "title": "Login page crashes",
+    "description": "Application crashes when clicking submit",
+    "status": "open",
+    "created_date": "2024-01-15",
+    "url": "https://github.com/example/repo/issues/1"
+  }
+]
+```
+
+**Key Options**:
+- `--poll-interval`: Seconds between polling for batch results (default: 10)
+- `--format`: Output format `text` or `json` (default: `json`)
+
+#### 3. Batch Duplicate Detection (Cosine Similarity)
+
+Fast local duplicate checking for multiple issues without API calls:
+
+```bash
+# Check for duplicates using cosine similarity
+python -m cli.batch_cosine_check \
+  --new-issues new_issues.json \
+  --existing-issues existing_issues.json \
+  --threshold 0.8 \
+  --show-similar 5 \
+  --output results.json
+```
+
+**Key Options**:
+- `--threshold`: Similarity threshold 0.0-1.0 (default: 0.7)
+- `--confidence-threshold`: Confidence threshold (default: 0.6)
+- `--show-similar N`: Show top N similar issues for each
+- `--format`: Output format `text` or `json` (default: `json`)
+
+### Benefits of Batch Processing
+
+**Cost Efficiency**:
+- Gemini Batch API typically offers lower pricing than synchronous API calls
+- Reduced API overhead for bulk operations
+- Cosine similarity requires no API calls (free, local processing)
+
+**Performance**:
+- Process multiple issues in parallel
+- Single vectorization pass for cosine similarity (vs. multiple passes)
+- Optimized network usage
+
+**Scalability**:
+- Handle hundreds or thousands of issues efficiently
+- Asynchronous processing allows for large-scale operations
+- Better resource utilization
+
+### Output Formats
+
+#### JSON Output (default)
+```json
+{
+  "summary": {
+    "total_issues": 10,
+    "duplicates_found": 3,
+    "unique_issues": 7,
+    "timestamp": "2024-01-30T10:30:00"
+  },
+  "results": [
+    {
+      "new_issue": {
+        "title": "...",
+        "description": "..."
+      },
+      "is_duplicate": true,
+      "similarity_score": 0.85,
+      "confidence_score": 0.90,
+      "similarity_reasons": [...],
+      "recommendation": "...",
+      "duplicate_of": {...}
+    }
+  ]
+}
+```
+
+#### Text Output
+Human-readable format with:
+- Summary statistics
+- Individual issue results
+- Duplicate information
+- Similarity reasons
+- Recommendations
+
+### Best Practices
+
+1. **Batch Size**: Keep batch sizes reasonable (50-100 issues per batch)
+2. **Polling Interval**: Adjust based on batch size (larger batches = longer intervals)
+3. **Source Path**: Generate fresh codebase with repomix before batch analysis
+4. **Error Handling**: Always check output for errors or failed analyses
+5. **Testing**: Start with sample files to verify configuration
+
+### Example Workflow
+
+Complete example of batch processing existing issues:
+
+```bash
+# Step 1: Generate codebase file
+repomix --output repomix-output.txt
+
+# Step 2: Export existing issues from GitHub (you'll need to do this manually or via API)
+# Create issues.json with your issue data
+
+# Step 3: Run batch analysis
+python -m cli.batch_analyze \
+  --issues-file issues.json \
+  --source-path repomix-output.txt \
+  --output analysis_results.json \
+  --poll-interval 15
+
+# Step 4: Check for duplicates (optional)
+python -m cli.batch_cosine_check \
+  --new-issues new_issues.json \
+  --existing-issues existing_issues.json \
+  --threshold 0.75 \
+  --output duplicate_results.json
+
+# Step 5: Review results
+cat analysis_results.json | jq '.summary'
+```
+
+### Troubleshooting Batch Operations
+
+**Batch Job Fails**:
+- Check API key validity
+- Verify input file format
+- Ensure sufficient API quota
+- Review error messages in output
+
+**Slow Processing**:
+- Increase poll interval to reduce API calls
+- Check batch job size (may be too large)
+- Verify network connectivity
+
+**Low-Quality Results**:
+- Increase retry count with `--retries`
+- Check source file quality
+- Verify codebase content is loaded correctly
 
 ---
 
