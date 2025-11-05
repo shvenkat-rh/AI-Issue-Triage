@@ -1,0 +1,384 @@
+name: AI Bulk Labeled Issue Analysis
+
+on:
+  pull_request:
+    types: [ closed ]
+    branches: [ main ]
+
+jobs:
+  analyze-labeled-issues:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    
+    permissions:
+      issues: write
+      contents: read
+    
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js for repomix
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Setup Python for AI analysis
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install repomix
+        run: |
+          npm install -g repomix
+          echo "Repomix installed successfully"
+          repomix --version
+      
+      - name: Generate repomix output
+        run: |
+          echo "Reading configuration from triage.config.json..."
+          REPO_URL=$(jq -r '.repository.url' triage.config.json)
+          REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' triage.config.json)
+          echo "Repository URL: $REPO_URL"
+          echo "Repomix output path: $REPOMIX_OUTPUT"
+          
+          echo "Running repomix on repository using remote..."
+          repomix --remote "$REPO_URL" --output "$REPOMIX_OUTPUT"
+          echo "Repomix output generated successfully"
+          ls -la "$REPOMIX_OUTPUT"
+      
+      - name: Clone AI-Issue-Triage repository
+        uses: actions/checkout@v4
+        with:
+          repository: shvenkat-rh/AI-Issue-Triage
+          ref: main
+          path: ai-triage
+          fetch-depth: 1
+      
+      - name: Install Python dependencies for AI triage
+        run: |
+          cd ai-triage
+          
+          echo "Installing Python dependencies..."
+          if pip install -r requirements.txt; then
+          echo "Python dependencies installed successfully"
+          else
+            echo "ERROR: Failed to install Python dependencies"
+            echo "Requirements file contents:"
+            cat requirements.txt
+            exit 1
+          fi
+          
+          # Verify critical packages are installed
+          python3 -c "import pytector; print('✓ pytector installed')" || echo "⚠️ pytector not available"
+          python3 -c "import google.genai; print('✓ google-genai installed')" || echo "⚠️ google-genai not available"
+      
+      - name: Fetch issues labeled "Gemini Analyze"
+        id: fetch-issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Get all open issues with "Gemini Analyze" label (oldest first for duplicate detection)
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'Gemini Analyze',
+              per_page: 100,
+              sort: 'created',
+              direction: 'asc'  // Oldest first
+            });
+            
+            // Filter out pull requests
+            const actualIssues = issues.filter(issue => !issue.pull_request);
+            console.log(`Found ${actualIssues.length} open issues with "Gemini Analyze" label (processing oldest → newest)`);
+            
+            // Save issue numbers to file for bash processing
+            const issueNumbers = actualIssues.map(i => i.number);
+            fs.writeFileSync('issue_numbers.txt', issueNumbers.join('\n') + '\n');
+            
+            // Also save full issue data for duplicate detection
+            const issueData = actualIssues.map(i => ({
+              number: i.number,
+              title: i.title,
+              body: i.body || '',
+              html_url: i.html_url,
+              labels: i.labels.map(l => typeof l === 'string' ? l : l.name)
+            }));
+            fs.writeFileSync('all_issues.json', JSON.stringify(issueData, null, 2));
+            
+            console.log(`Saved ${issueNumbers.length} issue numbers to issue_numbers.txt`);
+            console.log(`Issue numbers: ${issueNumbers.join(', ')}`);
+      
+      - name: Process labeled issues
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          
+          # Read configuration
+          REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' triage.config.json)
+          CUSTOM_PROMPT_PATH=$(jq -r '.analysis.custom_prompt_path // ""' triage.config.json)
+          
+          echo "Using repomix output: $REPOMIX_OUTPUT"
+          if [ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ]; then
+            echo "Using custom prompt: $CUSTOM_PROMPT_PATH"
+          fi
+          
+          # Verify required files exist
+          echo ""
+          echo "Verifying required files..."
+          if [ ! -f "$REPOMIX_OUTPUT" ]; then
+            echo "ERROR: Repomix output file not found: $REPOMIX_OUTPUT"
+            ls -la
+            exit 1
+          fi
+          echo "✓ Repomix output exists: $REPOMIX_OUTPUT"
+          
+          if [ ! -f "issue_numbers.txt" ]; then
+            echo "ERROR: issue_numbers.txt not found"
+            ls -la
+            exit 1
+          fi
+          echo "✓ Issue numbers file exists"
+          
+          ISSUE_COUNT_TOTAL=$(wc -l < issue_numbers.txt | tr -d ' ')
+          if [ "$ISSUE_COUNT_TOTAL" -eq 0 ]; then
+            echo "No issues with 'Gemini Analyze' label to process. Exiting successfully."
+            exit 0
+          fi
+          echo "✓ Found $ISSUE_COUNT_TOTAL issues with 'Gemini Analyze' label to process"
+          echo "Issue numbers from file: $(cat issue_numbers.txt | tr '\n' ', ' | sed 's/,$//')"
+          
+          if [ ! -f "all_issues.json" ]; then
+            echo "ERROR: all_issues.json not found"
+            exit 1
+          fi
+          echo "✓ Issue data file exists"
+          
+          # Copy repomix output to ai-triage directory
+          echo ""
+          echo "Copying repomix output to ai-triage directory..."
+          cp "$REPOMIX_OUTPUT" ai-triage/
+          echo "✓ Repomix output copied"
+          
+          # Initialize analyzed issues file (for duplicate detection)
+          echo "[]" > analyzed_issues.json
+          echo "✓ Initialized analyzed_issues.json"
+          
+          # Process each issue
+          echo ""
+          echo "================================================================"
+          echo "Starting bulk analysis of $ISSUE_COUNT_TOTAL labeled issues..."
+          echo "================================================================"
+          
+          ISSUE_COUNT=0
+          while IFS= read -r ISSUE_NUMBER; do
+            ISSUE_COUNT=$((ISSUE_COUNT + 1))
+            echo ""
+            echo "================================================================"
+            echo "Processing Issue #$ISSUE_NUMBER ($ISSUE_COUNT of $(wc -l < issue_numbers.txt))"
+            echo "================================================================"
+            
+            # Get issue details
+            ISSUE_DATA=$(jq -r ".[] | select(.number == $ISSUE_NUMBER)" all_issues.json)
+            ISSUE_TITLE=$(echo "$ISSUE_DATA" | jq -r '.title')
+            ISSUE_BODY=$(echo "$ISSUE_DATA" | jq -r '.body // ""')
+            
+            echo "Title: $ISSUE_TITLE"
+            
+            # ==================== PROMPT INJECTION CHECK ====================
+            echo ""
+            echo ">>> Step 1: Checking for prompt injection..."
+            cd ai-triage
+            
+            HAS_INJECTION="false"
+            RISK_LEVEL="safe"
+            
+            if [ -f "utils/security/prompt_injection.py" ]; then
+              if python3 -m utils.security.prompt_injection "$ISSUE_TITLE" "$ISSUE_BODY" > "prompt_injection_${ISSUE_NUMBER}.json" 2>"prompt_injection_debug_${ISSUE_NUMBER}.log"; then
+                echo "Prompt injection detection completed"
+              else
+                echo "WARNING: Prompt injection detection failed, trying debug mode..."
+                python3 -m utils.security.prompt_injection "$ISSUE_TITLE" "$ISSUE_BODY" --debug > "prompt_injection_${ISSUE_NUMBER}.json" 2>&1 || {
+                  echo '{"has_prompt_injection": false, "risk_level": "safe", "error": "detection_failed"}' > "prompt_injection_${ISSUE_NUMBER}.json"
+                }
+              fi
+              
+              # Parse results
+              if [ -f "prompt_injection_${ISSUE_NUMBER}.json" ]; then
+                HAS_INJECTION=$(jq -r '.has_prompt_injection // false' "prompt_injection_${ISSUE_NUMBER}.json")
+                RISK_LEVEL=$(jq -r '.risk_level // "safe"' "prompt_injection_${ISSUE_NUMBER}.json")
+                echo "Prompt injection detected: $HAS_INJECTION (Risk: $RISK_LEVEL)"
+              fi
+            else
+              echo "Prompt injection detection not available"
+            fi
+            
+            cd ..
+            
+            # Post prompt injection report
+            RISK_EMOJI="✅"
+            case "$RISK_LEVEL" in
+              critical) RISK_EMOJI="🚨" ;;
+              high) RISK_EMOJI="⚠️" ;;
+              medium) RISK_EMOJI="⚡" ;;
+              low) RISK_EMOJI="ℹ️" ;;
+            esac
+            
+            INJECTION_COMMENT="${RISK_EMOJI} **Prompt Injection Analysis Report**\n\n**Risk Level:** $(echo $RISK_LEVEL | tr '[:lower:]' '[:upper:]')\n\n"
+            
+            if [ "$RISK_LEVEL" = "safe" ]; then
+              INJECTION_COMMENT="${INJECTION_COMMENT}This issue has been analyzed and appears to be safe. No prompt injection patterns were detected.\n\n"
+              INJECTION_COMMENT="${INJECTION_COMMENT}**Analysis Result:** ✅ SAFE\n\n"
+            elif [ "$RISK_LEVEL" = "critical" ] || [ "$RISK_LEVEL" = "high" ]; then
+              INJECTION_COMMENT="${INJECTION_COMMENT}**⚠️ SECURITY ALERT**\n\nThis issue contains content that appears to be a prompt injection attempt. For security reasons, this issue will not be processed by the AI analysis system.\n\n"
+              
+              # Add security labels
+              gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-blocked" || echo "Failed to add labels"
+            else
+              INJECTION_COMMENT="${INJECTION_COMMENT}This issue contains content that may contain prompt injection patterns, but the risk level is manageable. Processing will continue with caution.\n\n"
+              
+              # Add warning label
+              gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-warning" || echo "Failed to add labels"
+            fi
+            
+            INJECTION_COMMENT="${INJECTION_COMMENT}---\n*This security check is performed automatically to protect the AI analysis system.*"
+            
+            # Post comment (write to file first to avoid escaping issues)
+            printf "%b" "$INJECTION_COMMENT" > "injection_comment_${ISSUE_NUMBER}.md"
+            gh issue comment "$ISSUE_NUMBER" --body-file "injection_comment_${ISSUE_NUMBER}.md" || echo "Failed to post injection comment"
+            
+            # Skip analysis for high/critical risk
+            if [ "$RISK_LEVEL" = "critical" ] || [ "$RISK_LEVEL" = "high" ]; then
+              echo "SECURITY: Skipping analysis for issue #$ISSUE_NUMBER due to $RISK_LEVEL risk"
+              continue
+            fi
+            
+            # ==================== DUPLICATE CHECK ====================
+            echo ""
+            echo ">>> Step 2: Checking for duplicates..."
+            
+            # Create JSON file with previously analyzed issues
+            ANALYZED_COUNT=$(jq 'length' analyzed_issues.json)
+            echo "Comparing against $ANALYZED_COUNT previously analyzed issues..."
+            
+            IS_DUPLICATE="false"
+            if [ "$ANALYZED_COUNT" -gt 0 ]; then
+              # Create issues list for duplicate check
+              jq '[.[] | {issue_id: .number, title: .title, description: .body, status: "open", url: .html_url}]' analyzed_issues.json > ai-triage/existing_issues_analyzed.json
+              
+              cd ai-triage
+              if python -m cli.duplicate_check --title "$ISSUE_TITLE" --description "$ISSUE_BODY" --issues existing_issues_analyzed.json --output json > "duplicate_result_${ISSUE_NUMBER}.json" 2>&1; then
+                IS_DUPLICATE=$(jq -r '.is_duplicate // false' "duplicate_result_${ISSUE_NUMBER}.json")
+                echo "Duplicate check result: $IS_DUPLICATE"
+                
+                if [ "$IS_DUPLICATE" = "true" ]; then
+                  DUPLICATE_OF=$(jq -r '.duplicate_of.issue_id' "duplicate_result_${ISSUE_NUMBER}.json")
+                  CONFIDENCE=$(jq -r '.confidence_score // 0' "duplicate_result_${ISSUE_NUMBER}.json")
+                  REASONING=$(jq -r '.reasoning // "Similar issue detected"' "duplicate_result_${ISSUE_NUMBER}.json")
+                  
+                  echo "Issue #$ISSUE_NUMBER is a DUPLICATE of issue #$DUPLICATE_OF"
+                  
+                  # Add duplicate label
+                  cd ..
+                  gh issue edit "$ISSUE_NUMBER" --add-label "duplicate" || echo "Failed to add duplicate label"
+                  
+                  # Post duplicate comment
+                  CONFIDENCE_PERCENT=$(echo "scale=0; $CONFIDENCE * 100 / 1" | bc)
+                  DUP_COMMENT="## Duplicate Issue Detected\n\nThis issue appears to be a duplicate of #${DUPLICATE_OF}.\n\n"
+                  DUP_COMMENT="${DUP_COMMENT}**Confidence Score:** ${CONFIDENCE_PERCENT}%\n\n"
+                  DUP_COMMENT="${DUP_COMMENT}**Reasoning:** $REASONING\n\n"
+                  DUP_COMMENT="${DUP_COMMENT}Please review the original issue before continuing with this one.\n\n"
+                  DUP_COMMENT="${DUP_COMMENT}---\n*This check was performed during bulk analysis.*"
+                  
+                  # Post comment (write to file first to avoid escaping issues)
+                  printf "%b" "$DUP_COMMENT" > "duplicate_comment_${ISSUE_NUMBER}.md"
+                  gh issue comment "$ISSUE_NUMBER" --body-file "duplicate_comment_${ISSUE_NUMBER}.md" || echo "Failed to post duplicate comment"
+                  
+                  echo "Skipping full AI analysis for duplicate issue"
+                  continue
+                fi
+              else
+                echo "Duplicate detection failed, assuming not duplicate"
+                IS_DUPLICATE="false"
+              fi
+              cd ..
+            else
+              echo "No previously analyzed issues to compare against (first issue)"
+            fi
+            
+            # ==================== AI ANALYSIS ====================
+            echo ""
+            echo ">>> Step 3: Running AI analysis..."
+            
+            # Add this issue to analyzed list
+            jq --arg num "$ISSUE_NUMBER" --arg title "$ISSUE_TITLE" --arg body "$ISSUE_BODY" --arg url "$(echo "$ISSUE_DATA" | jq -r '.html_url')" \
+              '. += [{number: ($num | tonumber), title: $title, body: $body, html_url: $url}]' \
+              analyzed_issues.json > analyzed_issues_tmp.json
+            mv analyzed_issues_tmp.json analyzed_issues.json
+            echo "Added issue #$ISSUE_NUMBER to analyzed list (total: $(jq 'length' analyzed_issues.json))"
+            
+            cd ai-triage
+            
+            # Build CLI arguments
+            CLI_ARGS="--title \"$ISSUE_TITLE\" --description \"$ISSUE_BODY\" --source-path \"$(basename $REPOMIX_OUTPUT)\""
+            
+            if [ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ] && [ -f "../$CUSTOM_PROMPT_PATH" ]; then
+              CLI_ARGS="$CLI_ARGS --custom-prompt \"../$CUSTOM_PROMPT_PATH\""
+            fi
+            
+            # Run analysis (JSON format)
+            echo "Running analysis..."
+            eval "python -m cli.analyze $CLI_ARGS --format json --output analysis_result_${ISSUE_NUMBER}.json --quiet" || {
+              echo "ERROR: Analysis failed for issue #$ISSUE_NUMBER"
+              cd ..
+              continue
+            }
+            
+            # Run analysis (text format)
+            eval "python -m cli.analyze $CLI_ARGS --format text --output analysis_result_${ISSUE_NUMBER}.txt --quiet" || {
+              echo "ERROR: Text analysis failed for issue #$ISSUE_NUMBER"
+              cd ..
+              continue
+            }
+            
+            echo "Analysis completed successfully"
+            
+            # Read analysis results
+            ANALYSIS_TEXT=$(cat "analysis_result_${ISSUE_NUMBER}.txt")
+            
+            cd ..
+            
+            # Post analysis comment (write to file first to avoid escaping issues)
+            printf "## Updated AI Analysis\n\n*This analysis was updated following recent changes to the codebase.*\n\n%s" "$ANALYSIS_TEXT" > "analysis_comment_${ISSUE_NUMBER}.md"
+            gh issue comment "$ISSUE_NUMBER" --body-file "analysis_comment_${ISSUE_NUMBER}.md" || echo "Failed to post analysis comment"
+            
+            # Update labels
+            if [ -f "ai-triage/analysis_result_${ISSUE_NUMBER}.json" ]; then
+              ISSUE_TYPE=$(jq -r '.issue_type // ""' "ai-triage/analysis_result_${ISSUE_NUMBER}.json")
+              SEVERITY=$(jq -r '.severity // ""' "ai-triage/analysis_result_${ISSUE_NUMBER}.json")
+              
+              LABELS_TO_ADD="gemini-analyzed"
+              if [ -n "$ISSUE_TYPE" ] && [ "$ISSUE_TYPE" != "null" ]; then
+                LABELS_TO_ADD="${LABELS_TO_ADD},type:${ISSUE_TYPE}"
+              fi
+              if [ -n "$SEVERITY" ] && [ "$SEVERITY" != "null" ]; then
+                LABELS_TO_ADD="${LABELS_TO_ADD},severity:${SEVERITY}"
+              fi
+              
+              gh issue edit "$ISSUE_NUMBER" --add-label "$LABELS_TO_ADD" || echo "Failed to update labels"
+            fi
+            
+            echo "Issue #$ISSUE_NUMBER processed successfully"
+            
+          done < issue_numbers.txt
+          
+          echo ""
+          echo "================================================================"
+          echo "Bulk analysis completed! Processed $ISSUE_COUNT labeled issues."
+          echo "================================================================"
+
