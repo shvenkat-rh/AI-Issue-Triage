@@ -8,16 +8,18 @@ This `cutlery/` directory contains everything you need to get started:
 
 ```
 cutlery/
-├── QUICKSTART.md                      # This guide
-├── workflows/                         # GitHub Actions workflows
-│   ├── gemini-issue-analysis.yml     # Single issue analysis workflow
-│   └── ai-bulk-issue-analysis.yml    # Bulk issue analysis workflow
-├── triage.config.json                # Example configuration file
-└── samples/                          # Sample files for testing
-    ├── sample_issue.txt              # Example issue for testing
-    ├── sample_issues.json            # Multiple test issues
-    ├── sample-prompt.txt             # Example custom prompt
-    └── env_example.txt               # Environment variables template
+├── QUICKSTART.md                              # This guide
+├── workflows/                                 # GitHub Actions workflows
+│   ├── gemini-issue-analysis.yml             # Auto: Single issue analysis
+│   ├── gemini-labeled-issue-analysis.yml     # Label: Single issue analysis  
+│   ├── ai-bulk-issue-analysis.yml            # Auto: Bulk issue analysis
+│   └── ai-bulk-labeled-issue-analysis.yml    # Label: Bulk issue analysis
+├── triage.config.json                        # Example configuration file
+└── samples/                                  # Sample files for testing
+    ├── sample_issue.txt                      # Example issue for testing
+    ├── sample_issues.json                    # Multiple test issues
+    ├── sample-prompt.txt                     # Example custom prompt
+    └── env_example.txt                       # Environment variables template
 ```
 
 
@@ -35,29 +37,54 @@ cutlery/
 
 ## Overview
 
-This system provides two automated workflows:
+This system provides **four automated workflows** in two categories:
+
+### Automatic Workflows (All Issues)
 
 1. **Single Issue Analysis** (`gemini-issue-analysis.yml`)
    - Triggers when a new issue is opened
-   - Analyzes the issue against your codebase
+   - Analyzes **every new issue** automatically
    - Provides AI-powered insights, root cause analysis, and solutions
    - Includes prompt injection security checks
 
 2. **Bulk Issue Analysis** (`ai-bulk-issue-analysis.yml`)
    - Triggers when a PR is merged to main
-   - Processes all open issues (oldest → newest)
+   - Processes **all open issues** (oldest → newest)
    - Smart duplicate detection: compares each issue against previously analyzed ones
    - Re-analyzes all open issues with updated codebase context
    - Posts new analysis comments with fresh insights
-   - Includes prompt injection reports for all issues
+
+### Label-Based Workflows (Selective Analysis) 🎯 NEW!
+
+3. **Labeled Issue Analysis** (`gemini-labeled-issue-analysis.yml`)
+   - Triggers when an issue is **labeled** or opened with "Gemini Analyze" label
+   - Analyzes **only issues with the "Gemini Analyze" label**
+   - Same comprehensive analysis as automatic workflow
+   - Perfect for manual triage and cost control
+
+4. **Bulk Labeled Analysis** (`ai-bulk-labeled-issue-analysis.yml`)
+   - Triggers when a PR is merged to main
+   - Processes **only open issues with "Gemini Analyze" label**
+   - Smart duplicate detection within labeled issues
+   - Ideal for focusing on complex or high-priority issues
+
+### When to Use Label-Based Workflows
+
+- 🎯 **Cost Control**: Reduce API usage by analyzing only selected issues
+- 🔍 **Manual Triage**: Team decides which issues need AI analysis
+- ⚡ **Complex Issues**: Focus AI resources on difficult problems
+- 📊 **Gradual Rollout**: Test AI analysis on select issues first
+- 💰 **Budget Constraints**: Limit API calls to fit your budget
 
 ### Key Features
 
+- **Beautiful UI**: Professional GitHub-flavored Markdown with emojis and collapsible sections
 - **Automated Analysis**: AI analyzes issues using your codebase context  
 - **Security Protection**: Built-in prompt injection detection  
 - **Configurable**: Customize repository, prompts, and output paths  
 - **Duplicate Detection**: Identifies duplicate issues automatically  
-- **Smart Labeling**: Auto-assigns labels based on analysis  
+- **Smart Labeling**: Auto-assigns labels based on analysis
+- **Flexible Filtering**: Choose automatic (all issues) or label-based (selective) workflows  
 
 ---
 
@@ -103,18 +130,46 @@ The workflows automatically clone this repository during execution - **no manual
 
 ## Setup Steps
 
-### Step 1: Copy Workflow Files
+### Step 1: Choose and Copy Workflow Files
 
-Copy the workflow files from this directory to your repository:
+You have **four workflow options**. Choose the ones that fit your needs:
 
-**From**: `cutlery/workflows/`  
-**To**: `.github/workflows/` in your repository
+#### Option A: Automatic Workflows (All Issues)
+Copy these to analyze all issues automatically:
+
+```bash
+# From cutlery/workflows/ to .github/workflows/
+gemini-issue-analysis.yml      → Analyzes every new issue
+ai-bulk-issue-analysis.yml     → Re-analyzes all open issues on PR merge
+```
+
+**Best for**: Small to medium repositories, comprehensive issue tracking
+
+#### Option B: Label-Based Workflows (Selective Analysis) 🎯
+Copy these to analyze only labeled issues:
+
+```bash
+# From cutlery/workflows/ to .github/workflows/
+gemini-labeled-issue-analysis.yml     → Analyzes only labeled issues
+ai-bulk-labeled-issue-analysis.yml    → Re-analyzes only labeled issues on PR merge
+```
+
+**Best for**: Cost control, manual triage, high-volume repositories
+
+#### Option C: Both (Recommended for Flexibility)
+Copy all four workflows and use labels to control which issues get analyzed:
 
 ```bash
 .github/workflows/
-├── gemini-issue-analysis.yml      # Single issue analysis (from cutlery/workflows/)
-└── ai-bulk-issue-analysis.yml     # Bulk issue analysis (from cutlery/workflows/)
+├── gemini-issue-analysis.yml              # Auto: Single issue
+├── gemini-labeled-issue-analysis.yml      # Label: Single issue  
+├── ai-bulk-issue-analysis.yml             # Auto: Bulk issues
+└── ai-bulk-labeled-issue-analysis.yml     # Label: Bulk issues
 ```
+
+**Best for**: Maximum flexibility, gradual rollout, testing
+
+> **💡 Tip**: Start with label-based workflows to test the system, then switch to automatic workflows once you're confident.
 
 ### Step 2: Create Configuration File
 
@@ -152,7 +207,21 @@ Create your own `triage.config.json`:
 5. **Value**: Paste your Gemini API key
 6. Click **"Add secret"**
 
-### Step 4: Commit and Push
+### Step 4: (Optional) Create "Gemini Analyze" Label
+
+**Only needed if using label-based workflows**
+
+1. Go to your repository on GitHub
+2. Navigate to **Issues** → **Labels**
+3. Click **"New label"**
+4. **Name**: `Gemini Analyze`
+5. **Description**: `Trigger AI analysis for this issue`
+6. **Color**: Choose any color (suggestion: `#0E8A16` for green)
+7. Click **"Create label"**
+
+> **Note**: You can use a different label name by editing the workflow files and changing `'Gemini Analyze'` to your preferred label name.
+
+### Step 5: Commit and Push
 
 ```bash
 git add .github/workflows/ triage.config.json
@@ -160,21 +229,38 @@ git commit -m "Add AI issue triage workflows"
 git push origin main
 ```
 
-### Step 5: Test the Setup
+### Step 6: Test the Setup
 
-Create a test issue in your repository:
+#### Testing Automatic Workflows
+
+If you copied automatic workflows:
 
 1. Go to **Issues** → **New Issue**
 2. Title: `Test AI Analysis`
 3. Description: `This is a test issue to verify the AI analysis workflow is working correctly.`
 4. Click **Create issue**
 
+#### Testing Label-Based Workflows
+
+If you copied label-based workflows:
+
+1. Go to **Issues** → **New Issue**
+2. Title: `Test AI Analysis`
+3. Description: `This is a test issue to verify the AI analysis workflow is working correctly.`
+4. Click **Create issue**
+5. **Add the "Gemini Analyze" label** to the issue
+
 **Tip**: You can use content from `cutlery/samples/sample_issue.txt` for a more detailed test case.
 
+#### What to Expect
+
 Within a few minutes, you should see:
-- Workflow running in the **Actions** tab
-- AI analysis comment posted on the issue
-- Labels automatically added
+- ✅ Workflow running in the **Actions** tab
+- ✅ Beautiful AI analysis comment posted on the issue with:
+  - Professional formatting with emojis
+  - Collapsible sections for detailed information
+  - Syntax-highlighted code blocks
+- ✅ Labels automatically added (`gemini-analyzed`, `type:*`, `severity:*`)
 
 ---
 
@@ -349,16 +435,34 @@ This is useful for:
 
 ## Usage
 
+### Workflow Comparison
+
+| Feature | Automatic | Label-Based |
+|---------|-----------|-------------|
+| **Trigger** | All new issues | Only labeled issues |
+| **Cost** | Higher (more API calls) | Lower (fewer API calls) |
+| **Manual Work** | None | Add label to issues |
+| **Best For** | Complete automation | Manual triage, cost control |
+| **Issue Volume** | Low to medium | Any (especially high) |
+
 ### Single Issue Analysis
 
-**Triggered**: When a new issue is created
+#### Automatic (`gemini-issue-analysis.yml`)
+**Triggered**: When any new issue is created
 
-**What it does**:
+#### Label-Based (`gemini-labeled-issue-analysis.yml`)  
+**Triggered**: When an issue is labeled with "Gemini Analyze" OR opened with that label
+
+**What Both Do**:
 1. Fetches your codebase using repomix
 2. Checks for prompt injection (security)
 3. Checks for duplicate issues
 4. Analyzes the issue with AI
-5. Posts analysis comment
+5. Posts beautiful formatted analysis comment with:
+   - Emojis for visual indicators (🐛 🔴 📊)
+   - Collapsible sections for detailed info
+   - Syntax-highlighted code blocks
+   - Professional Markdown formatting
 6. Adds relevant labels
 
 **Labels Added**:
@@ -371,10 +475,16 @@ This is useful for:
 
 ### Bulk Issue Analysis
 
-**Triggered**: When a PR is merged to main
+#### Automatic (`ai-bulk-issue-analysis.yml`)
+**Triggered**: When a PR is merged to main  
+**Processes**: All open issues
 
-**What it does**:
-1. Fetches all open issues (sorted oldest → newest)
+#### Label-Based (`ai-bulk-labeled-issue-analysis.yml`)
+**Triggered**: When a PR is merged to main  
+**Processes**: Only open issues with "Gemini Analyze" label
+
+**What Both Do**:
+1. Fetches relevant open issues (sorted oldest → newest)
 2. For each issue (in order):
    - **Step 1: Prompt Injection Check**
      - Scans for malicious patterns
@@ -386,7 +496,7 @@ This is useful for:
      - If duplicate: adds `duplicate` label, posts duplicate comment with confidence score, skips AI analysis
    - **Step 3: AI Analysis** (if not duplicate)
      - Runs full analysis against updated codebase
-     - Posts "Updated AI Analysis" comment with fresh insights
+     - Posts beautifully formatted analysis with fresh insights
      - Adds labels: `gemini-analyzed`, `type:*`, `severity:*`
 
 **Smart Duplicate Detection**:
@@ -397,10 +507,15 @@ This is useful for:
 - Example: If Issue #50 and Issue #100 are duplicates, #100 will reference #50
 
 **Comments Posted**:
-Every issue receives at least one comment:
+Every issue receives at least one comment with beautiful formatting:
 - **Prompt Injection Report** - Posted for all issues (safe or risky)
 - **Duplicate Detection Comment** - Posted if duplicate found (with confidence score and reasoning)
-- **Updated AI Analysis** - Posted only for non-duplicate, safe issues (full analysis with fresh codebase context)
+- **AI Analysis** - Posted only for non-duplicate, safe issues with:
+  - 🤖 Professional header with emojis
+  - 📝 Executive summary
+  - 🔍 Root cause analysis with collapsible details
+  - 💡 Proposed solutions with code blocks
+  - Full analysis with fresh codebase context
 
 **Use Cases**:
 - After major code refactoring
@@ -639,8 +754,14 @@ Your repository now has automated AI-powered issue analysis!
 All files referenced in this guide can be found in the `cutlery/` directory:
 
 ### Workflows (Copy to Your Repo)
+
+**Automatic Workflows (All Issues)**:
 - `cutlery/workflows/gemini-issue-analysis.yml` → Copy to `.github/workflows/`
 - `cutlery/workflows/ai-bulk-issue-analysis.yml` → Copy to `.github/workflows/`
+
+**Label-Based Workflows (Selective Analysis)** 🎯:
+- `cutlery/workflows/gemini-labeled-issue-analysis.yml` → Copy to `.github/workflows/`
+- `cutlery/workflows/ai-bulk-labeled-issue-analysis.yml` → Copy to `.github/workflows/`
 
 ### Configuration Examples
 - `cutlery/triage.config.json` - Example configuration file
