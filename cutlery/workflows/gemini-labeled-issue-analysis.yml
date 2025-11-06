@@ -460,24 +460,21 @@ jobs:
           script: |
             const fs = require('fs');
             
-            // Read the analysis result
+            // Read the analysis result (already beautifully formatted)
             let analysisText;
             try {
               analysisText = fs.readFileSync('ai-triage/analysis_result.txt', 'utf8');
             } catch (error) {
               console.error('Error reading analysis file:', error);
-              analysisText = 'Failed to read analysis results.';
+              analysisText = '# ❌ Analysis Error\n\nFailed to read analysis results.';
             }
             
-            // Use plain text analysis result without formatting
-            const comment = analysisText;
-            
-            // Post the comment
+            // Post the beautifully formatted analysis
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: comment
+              body: analysisText
             });
             
             console.log('Analysis comment posted successfully');

@@ -232,94 +232,150 @@ def clean_issue_data(title: str, description: str) -> tuple[str, str]:
 
 
 def format_analysis_text(analysis) -> str:
-    """Format analysis results for text output."""
+    """Format analysis results for text output with beautiful GitHub-flavored Markdown."""
 
-    # Header
     output = []
-
-    output.append(f"GEMINI ISSUE ANALYSIS REPORT")
-
-    output.append(f"Title: {analysis.title}")
-    output.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Get severity emoji and color
+    severity_map = {
+        "critical": ("🔴", "Critical"),
+        "high": ("🟠", "High"),
+        "medium": ("🟡", "Medium"),
+        "low": ("🟢", "Low")
+    }
+    severity_emoji, severity_label = severity_map.get(
+        analysis.severity.value.lower(), ("⚪", analysis.severity.value.title())
+    )
+    
+    # Get issue type emoji
+    type_map = {
+        "bug": "🐛",
+        "enhancement": "✨",
+        "feature_request": "🚀"
+    }
+    type_emoji = type_map.get(analysis.issue_type.value.lower(), "📋")
+    
+    # Header with title and badges
+    output.append("# 🤖 AI Analysis Report")
+    output.append("")
+    output.append(f"**Issue:** {analysis.title}")
+    output.append("")
+    
+    # Status badges
+    confidence_percent = int(analysis.confidence_score * 100)
+    confidence_color = "green" if confidence_percent >= 80 else "yellow" if confidence_percent >= 60 else "orange"
+    
+    output.append(f"{type_emoji} **Type:** `{analysis.issue_type.value.upper()}`  ")
+    output.append(f"{severity_emoji} **Severity:** `{severity_label.upper()}`  ")
+    output.append(f"📊 **Confidence:** `{confidence_percent}%`  ")
+    output.append(f"⏰ **Generated:** `{datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}`")
+    output.append("")
+    output.append("---")
     output.append("")
 
-    # Classification
-    output.append("CLASSIFICATION")
-    output.append("-" * 40)
-    output.append(f"Type: {analysis.issue_type.value.upper()}")
-    output.append(f"Severity: {analysis.severity.value.upper()}")
-    output.append(f"Confidence: {analysis.confidence_score:.1%}")
+    # Summary Section
+    output.append("## 📝 Executive Summary")
     output.append("")
-
-    # Summary
-    output.append("ANALYSIS SUMMARY")
-    output.append("-" * 40)
     output.append(analysis.analysis_summary)
     output.append("")
+    output.append("---")
+    output.append("")
 
-    # Root Cause Analysis
-    output.append("ROOT CAUSE ANALYSIS")
-    output.append("-" * 40)
-    output.append(f"Primary Cause: {analysis.root_cause_analysis.primary_cause}")
+    # Root Cause Analysis Section
+    output.append("## 🔍 Root Cause Analysis")
+    output.append("")
+    output.append("### Primary Cause")
+    output.append("")
+    output.append(f"> {analysis.root_cause_analysis.primary_cause}")
     output.append("")
 
     if analysis.root_cause_analysis.contributing_factors:
-        output.append("Contributing Factors:")
+        output.append("<details>")
+        output.append("<summary><b>Contributing Factors</b></summary>")
+        output.append("")
         for factor in analysis.root_cause_analysis.contributing_factors:
-            output.append(f"  • {factor}")
+            output.append(f"- {factor}")
+        output.append("")
+        output.append("</details>")
         output.append("")
 
     if analysis.root_cause_analysis.affected_components:
-        output.append("Affected Components:")
+        output.append("<details>")
+        output.append("<summary><b>Affected Components</b></summary>")
+        output.append("")
         for component in analysis.root_cause_analysis.affected_components:
-            output.append(f"  • {component}")
+            output.append(f"- `{component}`")
+        output.append("")
+        output.append("</details>")
         output.append("")
 
     if analysis.root_cause_analysis.related_code_locations:
-        output.append("Related Code Locations:")
+        output.append("<details>")
+        output.append("<summary><b>Related Code Locations</b></summary>")
+        output.append("")
+        output.append("| File | Line | Class | Function |")
+        output.append("|------|------|-------|----------|")
         for location in analysis.root_cause_analysis.related_code_locations:
-            loc_parts = [f"File: {location.file_path}"]
-            if location.line_number:
-                loc_parts.append(f"Line: {location.line_number}")
-            if location.class_name:
-                loc_parts.append(f"Class: {location.class_name}")
-            if location.function_name:
-                loc_parts.append(f"Function: {location.function_name}")
-            output.append(f"  • {' | '.join(loc_parts)}")
+            file_path = f"`{location.file_path}`"
+            line_num = str(location.line_number) if location.line_number else "-"
+            class_name = f"`{location.class_name}`" if location.class_name else "-"
+            func_name = f"`{location.function_name}`" if location.function_name else "-"
+            output.append(f"| {file_path} | {line_num} | {class_name} | {func_name} |")
+        output.append("")
+        output.append("</details>")
         output.append("")
 
-    # Proposed Solutions
-    output.append("PROPOSED SOLUTIONS")
-    output.append("-" * 40)
+    output.append("---")
+    output.append("")
+
+    # Proposed Solutions Section
+    output.append("## 💡 Proposed Solutions")
+    output.append("")
 
     for i, solution in enumerate(analysis.proposed_solutions, 1):
-        output.append(f"Solution {i}: {solution.description}")
+        solution_num = f"Solution #{i}" if len(analysis.proposed_solutions) > 1 else "Solution"
+        output.append(f"### {solution_num}")
         output.append("")
-
-        output.append(f"Location:")
-        loc_parts = [f"File: {solution.location.file_path}"]
+        output.append(f"**{solution.description}**")
+        output.append("")
+        
+        # Location information
+        output.append("<details>")
+        output.append("<summary><b>📍 Implementation Details</b></summary>")
+        output.append("")
+        output.append("**Location:**")
+        output.append(f"- **File:** `{solution.location.file_path}`")
         if solution.location.line_number:
-            loc_parts.append(f"Line: {solution.location.line_number}")
+            output.append(f"- **Line:** `{solution.location.line_number}`")
         if solution.location.class_name:
-            loc_parts.append(f"Class: {solution.location.class_name}")
+            output.append(f"- **Class:** `{solution.location.class_name}`")
         if solution.location.function_name:
-            loc_parts.append(f"Function: {solution.location.function_name}")
-        output.append(f"  {' | '.join(loc_parts)}")
+            output.append(f"- **Function:** `{solution.location.function_name}`")
+        output.append("")
+        
+        # Rationale
+        output.append("**Rationale:**")
+        output.append("")
+        output.append(solution.rationale)
+        output.append("")
+        
+        # Code changes
+        output.append("**Code Changes:**")
+        output.append("")
+        output.append("```python")
+        output.append(solution.code_changes)
+        output.append("```")
+        output.append("")
+        output.append("</details>")
         output.append("")
 
-        output.append(f"Rationale:")
-        output.append(f"  {solution.rationale}")
-        output.append("")
-
-        output.append(f"Code Changes:")
-        # Indent code changes
-        code_lines = solution.code_changes.split("\n")
-        for line in code_lines:
-            output.append(f"  {line}")
-        output.append("")
-
-        if i < len(analysis.proposed_solutions):
-            output.append("-" * 40)
+    output.append("---")
+    output.append("")
+    
+    # Footer
+    output.append("<sub>")
+    output.append("🤖 *This analysis was generated by Gemini AI. Please review carefully and validate before implementing.*")
+    output.append("</sub>")
 
     return "\n".join(output)
 

@@ -353,8 +353,8 @@ jobs:
             
             cd ..
             
-            # Post analysis comment (write to file first to avoid escaping issues)
-            printf "## Updated AI Analysis\n\n*This analysis was updated following recent changes to the codebase.*\n\n%s" "$ANALYSIS_TEXT" > "analysis_comment_${ISSUE_NUMBER}.md"
+            # Post analysis comment (already beautifully formatted, no wrapper needed)
+            printf "%s" "$ANALYSIS_TEXT" > "analysis_comment_${ISSUE_NUMBER}.md"
             gh issue comment "$ISSUE_NUMBER" --body-file "analysis_comment_${ISSUE_NUMBER}.md" || echo "Failed to post analysis comment"
             
             # Update labels
