@@ -57,7 +57,7 @@ This system provides **four automated workflows** in two categories:
 ### Label-Based Workflows (Selective Analysis) 🎯 NEW!
 
 3. **Labeled Issue Analysis** (`gemini-labeled-issue-analysis.yml`)
-   - Triggers when an issue is **labeled** or opened with "Gemini Analyze" label
+   - Triggers when an issue is **labeled** and opened with "Gemini Analyze" label
    - Analyzes **only issues with the "Gemini Analyze" label**
    - Same comprehensive analysis as automatic workflow
    - Perfect for manual triage and cost control
