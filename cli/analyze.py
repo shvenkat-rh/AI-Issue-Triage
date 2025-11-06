@@ -322,7 +322,7 @@ def format_analysis_text(analysis) -> str:
     output.append("")
 
     for i, solution in enumerate(analysis.proposed_solutions, 1):
-        solution_num = f"Solution #{i}" if len(analysis.proposed_solutions) > 1 else "Solution"
+        solution_num = f"Solution {i}" if len(analysis.proposed_solutions) > 1 else "Solution"
         output.append(f"### {solution_num}")
         output.append("")
         output.append(f"**{solution.description}**")
