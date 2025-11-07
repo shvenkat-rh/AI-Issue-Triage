@@ -35,7 +35,7 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 - **Smart Retry Mechanism**: Automatically retries analysis if low-quality responses are detected
 - **Security Protection**: Built-in prompt injection detection to protect against malicious inputs
 - **Duplicate Detection**: Automatically identifies and flags duplicate issues
-- **GitHub Actions Integration**: Automated issue analysis workflow for GitHub repositories
+- **GitHub Actions Integration**: Multiple workflow options including label-based filtering for selective analysis
 
 ## Setup
 
@@ -104,10 +104,18 @@ The AI Issue Triage system can be used in multiple ways:
 
 ### Quick Overview
 
-The most powerful way to use this system is through automated GitHub Actions workflows. The system provides:
+The most powerful way to use this system is through automated GitHub Actions workflows. The system provides **four workflow options**:
 
+#### Automatic Workflows (All Issues)
 - **Single Issue Analysis**: Analyzes each new issue as it's created
 - **Bulk Issue Analysis**: Re-analyzes all open issues when code changes (with smart duplicate detection)
+
+#### Label-Based Workflows (Selective Analysis)
+- **Labeled Issue Analysis**: Only analyzes issues with "Gemini Analyze" label
+- **Bulk Labeled Analysis**: Re-analyzes only labeled issues on PR merge
+
+#### Common Features
+- **Beautiful Formatting**: Professional GitHub-flavored Markdown with emojis and collapsible sections
 - **Security Checks**: Built-in prompt injection detection
 - **Duplicate Detection**: Identifies similar/duplicate issues automatically
 
@@ -119,7 +127,8 @@ For detailed step-by-step instructions, **see the [QUICKSTART Guide](cutlery/QUI
 1. Copy workflows from `cutlery/workflows/` to `.github/workflows/` in your repo
 2. Add `GEMINI_API_KEY` secret in GitHub repository settings
 3. Create `triage.config.json` (example in `cutlery/triage.config.json`)
-4. Push changes and create a test issue
+4. (Optional) Create "Gemini Analyze" label for selective analysis
+5. Push changes and create a test issue
 
 #### How It Works
 
@@ -159,28 +168,47 @@ For detailed step-by-step instructions, **see the [QUICKSTART Guide](cutlery/QUI
   - Updated AI analysis (non-duplicate, safe issues)
 - **Artifact Storage**: Saves analysis results and debug logs for review
 - **Fast Processing**: Uses latest Gemini 2.0 Flash model for quick analysis
+- **Flexible Filtering**: Choose between automatic (all issues) or label-based (selective) workflows
 
-#### Workflow Configuration
+#### Available Workflows
 
-The GitHub Actions workflow (`gemini-issue-analysis.yml`) can be customized for your needs:
+The system provides four workflow files in `cutlery/workflows/`:
+
+| Workflow File | Trigger | Filter | Use Case |
+|--------------|---------|--------|----------|
+| `gemini-issue-analysis.yml` | Issue opened | None | Analyze all new issues automatically |
+| `gemini-labeled-issue-analysis.yml` | Issue opened/labeled | **"Gemini Analyze" label** | Selective analysis - only labeled issues |
+| `ai-bulk-issue-analysis.yml` | PR merged to main | None | Re-analyze all open issues |
+| `ai-bulk-labeled-issue-analysis.yml` | PR merged to main | **"Gemini Analyze" label** | Re-analyze only labeled issues |
+
+**When to Use Label-Based Workflows:**
+- 🎯 **Cost Control**: Reduce API usage by analyzing only selected issues
+- 🔍 **Manual Triage**: Team decides which issues need AI analysis
+- ⚡ **Complex Issues**: Focus AI resources on difficult problems
+- 📊 **Gradual Rollout**: Test AI analysis on select issues first
+
+**Workflow Configuration Example:**
 
 ```yaml
-# Example workflow configuration
+# Automatic: Analyzes all issues
 name: AI Issue Analysis
-
 on:
   issues:
-    types: [opened]  # Trigger on new issues
+    types: [opened]
 
+# Label-Based: Only analyzes issues with "Gemini Analyze" label
+name: AI Labeled Issue Analysis
+on:
+  issues:
+    types: [labeled, opened]
 jobs:
   analyze-issue:
-    runs-on: ubuntu-latest
-    steps:
-      # ... automated analysis steps
+    if: contains(github.event.issue.labels.*.name, 'Gemini Analyze')
 ```
 
 **Key Configuration Options:**
 - **Trigger Events**: Modify `on.issues.types` to include `edited`, `reopened`, etc.
+- **Label Filter**: Change `'Gemini Analyze'` to use a different label name
 - **Repository Source**: Change the AI-Issue-Triage repository reference if using a fork
 - **Node.js Version**: Adjust Node.js version for repomix compatibility
 - **Python Version**: Modify Python version based on your requirements
@@ -767,7 +795,7 @@ tests/
 AI-Issue-Triage/
 ├── .github/
 │   └── workflows/
-│       ├── gemini-issue-analysis.yml  # Auto issue analysis workflow
+│       ├── gemini-issue-analysis.yml  # (Example) Auto issue analysis workflow
 │       └── ci.yml                     # Combined CI workflow (tests + lint)
 │
 ├── utils/                      # 📦 Core Library Package
@@ -804,6 +832,10 @@ AI-Issue-Triage/
 ├── cutlery/                    # 🚀 Quick Start Resources
 │   ├── QUICKSTART.md          # Complete setup guide
 │   ├── workflows/             # GitHub Actions workflow templates
+│   │   ├── gemini-issue-analysis.yml           # ✅ Auto: Single issue
+│   │   ├── gemini-labeled-issue-analysis.yml   # ✅ Label: Single issue
+│   │   ├── ai-bulk-issue-analysis.yml          # ✅ Auto: Bulk issues
+│   │   └── ai-bulk-labeled-issue-analysis.yml  # ✅ Label: Bulk issues
 │   ├── triage.config.json     # Example configuration
 │   └── samples/               # Sample files for testing
 │
