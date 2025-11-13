@@ -351,9 +351,7 @@ def format_analysis_text(analysis) -> str:
         # Code changes
         output.append("**Code Changes:**")
         output.append("")
-        output.append("```python")
         output.append(solution.code_changes)
-        output.append("```")
         output.append("")
         output.append("</details>")
         output.append("")
