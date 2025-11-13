@@ -6,8 +6,8 @@ on:
 
 jobs:
   analyze-issue:
-    # Only run if the issue has the "Gemini Analyze" label
-    if: contains(github.event.issue.labels.*.name, 'Gemini Analyze')
+    # Run if the issue has "Gemini Analyze" OR "Bypass Prompt Injection Check" label
+    if: contains(github.event.issue.labels.*.name, 'Gemini Analyze') || contains(github.event.issue.labels.*.name, 'Bypass Prompt Injection Check')
     runs-on: ubuntu-latest
     
     permissions:
@@ -81,6 +81,7 @@ jobs:
 
       - name: Check for prompt injection
         id: prompt-injection
+        if: "!contains(github.event.issue.labels.*.name, 'Bypass Prompt Injection Check')"
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_DESCRIPTION: ${{ github.event.issue.body }}
@@ -497,50 +498,6 @@ jobs:
             });
             
             console.log('Analysis comment posted successfully');
-      
-      - name: Ensure Labels Exist with Colors
-        uses: actions/github-script@v7
-        with:
-          script: |
-            // Define label colors and descriptions
-            const labelDefinitions = {
-              'gemini-analyzed': { color: '0E8A16', description: '✅ Analyzed by Gemini AI' },
-              'duplicate': { color: 'CFD3D7', description: '🔄 Duplicate issue' },
-              'type:bug': { color: 'D73A4A', description: '🐛 Bug - Something isn\'t working' },
-              'type:enhancement': { color: 'A2EEEF', description: '✨ Enhancement - New feature' },
-              'type:feature-request': { color: 'BFD4F2', description: '💡 Feature Request' },
-              'type:documentation': { color: '0075CA', description: '📚 Documentation' },
-              'type:question': { color: 'D876E3', description: '❓ Question' },
-              'type:performance': { color: 'FBCA04', description: '⚡ Performance' },
-              'type:security': { color: 'B60205', description: '🔒 Security' },
-              'type:refactoring': { color: 'C5DEF5', description: '♻️ Refactoring' },
-              'severity:critical': { color: 'B60205', description: '🚨 Critical priority' },
-              'severity:high': { color: 'D93F0B', description: '🔴 High priority' },
-              'severity:medium': { color: 'FBCA04', description: '🟡 Medium priority' },
-              'severity:low': { color: '0E8A16', description: '🟢 Low priority' }
-            };
-            
-            // Create labels if they don't exist
-            for (const [name, config] of Object.entries(labelDefinitions)) {
-              try {
-                await github.rest.issues.getLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  name: name
-                });
-              } catch (error) {
-                if (error.status === 404) {
-                  console.log(`Creating label: ${name}`);
-                  await github.rest.issues.createLabel({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    name: name,
-                    color: config.color,
-                    description: config.description
-                  });
-                }
-              }
-            }
       
       - name: Add Labels Based on Analysis
         uses: actions/github-script@v7
