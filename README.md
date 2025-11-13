@@ -276,6 +276,9 @@ ai-triage --title "Bug" --description "Description" --source-path /path/to/my-co
 # Use custom prompt template
 ai-triage --title "Bug" --description "Description" --custom-prompt /path/to/custom_prompt.txt
 
+# Use a different Gemini model
+ai-triage --title "Bug" --description "Description" --model gemini-1.5-pro
+
 # Save output to file
 ai-triage --title "Bug" --description "Description" --output analysis.txt
 
@@ -311,8 +314,13 @@ options:
   --format {text,json}  Output format (default: text)
   --source-path SOURCE_PATH, -s SOURCE_PATH
                         Path to source of truth file (default: repomix-output.txt)
+  --custom-prompt CUSTOM_PROMPT
+                        Path to custom prompt template file
   --api-key API_KEY     Gemini API key (default: from GEMINI_API_KEY env var)
+  --model MODEL         Gemini model name (default: gemini-2.0-flash-001)
+  --retries RETRIES     Maximum retry attempts for low quality responses (default: 2)
   --quiet, -q           Suppress progress messages
+  --no-clean            Disable data cleaning (preserve raw input)
   --version             show program's version number and exit
 ```
 
@@ -339,6 +347,9 @@ Detect duplicate issues using AI-powered semantic analysis:
 # Check if a new issue is duplicate
 ai-triage-duplicate --title "Issue title" --description "Issue details" --issues issues.json
 
+# Use a different Gemini model
+ai-triage-duplicate --title "Issue title" --description "Details" --issues issues.json --model gemini-1.5-pro
+
 # Batch check multiple issues
 ai-triage-duplicate --file new-issues.json --issues existing-issues.json
 ```
@@ -352,6 +363,7 @@ python -m cli.duplicate_check --title "..." --description "..." --issues issues.
 - AI-powered semantic similarity detection
 - Compares against existing open issues
 - Provides similarity scores and recommendations
+- Configurable Gemini model selection
 
 **Status**: ✅ Stable and ready for use
 
@@ -431,7 +443,13 @@ analyzer = GeminiIssueAnalyzer(
     source_path="/path/to/your/codebase.txt"
 )
 
-# Note: The analyzer uses the Google Gen AI SDK with gemini-2.0-flash-001
+# Or use a different Gemini model
+analyzer = GeminiIssueAnalyzer(
+    api_key="your-api-key",
+    model_name="gemini-1.5-pro"
+)
+
+# Note: The analyzer uses the Google Gen AI SDK with gemini-2.0-flash-001 by default
 
 # Analyze an issue
 analysis = analyzer.analyze_issue(
@@ -444,7 +462,10 @@ print(f"Severity: {analysis.severity}")
 print(f"Root Cause: {analysis.root_cause_analysis.primary_cause}")
 
 # Use duplicate detection
-duplicate_analyzer = CosineDuplicateAnalyzer()
+duplicate_analyzer = GeminiDuplicateAnalyzer(
+    api_key="your-api-key",
+    model_name="gemini-1.5-pro"  # Optional
+)
 result = duplicate_analyzer.detect_duplicate(
     new_issue_title="Bug title",
     new_issue_description="Details",

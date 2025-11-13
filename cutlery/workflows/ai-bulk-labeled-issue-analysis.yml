@@ -122,10 +122,16 @@ jobs:
           # Read configuration
           REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' triage.config.json)
           CUSTOM_PROMPT_PATH=$(jq -r '.analysis.custom_prompt_path // ""' triage.config.json)
+          GEMINI_MODEL=$(jq -r '.gemini.model // ""' triage.config.json)
           
           echo "Using repomix output: $REPOMIX_OUTPUT"
           if [ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ]; then
             echo "Using custom prompt: $CUSTOM_PROMPT_PATH"
+          fi
+          if [ -n "$GEMINI_MODEL" ] && [ "$GEMINI_MODEL" != "null" ]; then
+            echo "Using Gemini model: $GEMINI_MODEL"
+          else
+            echo "Using default Gemini model: gemini-2.0-flash-001"
           fi
           
           # Verify required files exist
@@ -329,6 +335,10 @@ jobs:
             
             if [ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ] && [ -f "../$CUSTOM_PROMPT_PATH" ]; then
               CLI_ARGS="$CLI_ARGS --custom-prompt \"../$CUSTOM_PROMPT_PATH\""
+            fi
+            
+            if [ -n "$GEMINI_MODEL" ] && [ "$GEMINI_MODEL" != "null" ]; then
+              CLI_ARGS="$CLI_ARGS --model \"$GEMINI_MODEL\""
             fi
             
             # Run analysis (JSON format)

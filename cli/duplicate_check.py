@@ -219,6 +219,8 @@ Supported JSON formats:
 
     parser.add_argument("--api-key", help="Gemini API key (optional, can use GEMINI_API_KEY env var)")
 
+    parser.add_argument("--model", help="Gemini model name (default: gemini-2.0-flash-001)")
+
     parser.add_argument("--output", choices=["text", "json"], default="text", help="Output format (default: text)")
 
     args = parser.parse_args()
@@ -235,7 +237,7 @@ Supported JSON formats:
 
     # Interactive mode
     if args.interactive:
-        run_interactive_mode(args.issues, args.api_key)
+        run_interactive_mode(args.issues, args.api_key, args.model)
         return
 
     # Validate required arguments for duplicate detection
@@ -250,7 +252,7 @@ def run_duplicate_detection(args):
     """Run duplicate detection with provided arguments."""
     try:
         # Initialize analyzer
-        analyzer = GeminiDuplicateAnalyzer(api_key=args.api_key)
+        analyzer = GeminiDuplicateAnalyzer(api_key=args.api_key, model_name=args.model)
 
         # Load existing issues
         existing_issues = load_issues_from_file(args.issues)
@@ -287,7 +289,7 @@ def run_duplicate_detection(args):
         sys.exit(1)
 
 
-def run_interactive_mode(issues_file: str, api_key: str):
+def run_interactive_mode(issues_file: str, api_key: str, model_name: str = None):
     """Run the analyzer in interactive mode."""
     if not issues_file:
         print("ERROR: --issues file is required for interactive mode")
@@ -295,7 +297,7 @@ def run_interactive_mode(issues_file: str, api_key: str):
 
     try:
         # Initialize analyzer
-        analyzer = GeminiDuplicateAnalyzer(api_key=api_key)
+        analyzer = GeminiDuplicateAnalyzer(api_key=api_key, model_name=model_name)
 
         # Load existing issues
         existing_issues = load_issues_from_file(issues_file)

@@ -427,6 +427,8 @@ Examples:
 
     parser.add_argument("--api-key", help="Gemini API key (default: from GEMINI_API_KEY env var)")
 
+    parser.add_argument("--model", help="Gemini model name (default: gemini-2.0-flash-001)")
+
     parser.add_argument(
         "--retries", type=int, default=2, help="Maximum number of retry attempts for low quality responses (default: 2)"
     )
@@ -523,6 +525,7 @@ Examples:
             api_key=args.api_key,
             source_path=str(args.source_path) if args.source_path else None,
             custom_prompt_path=str(args.custom_prompt) if args.custom_prompt else None,
+            model_name=args.model,
         )
 
         if not args.quiet:

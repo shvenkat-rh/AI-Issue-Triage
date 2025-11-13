@@ -121,10 +121,16 @@ jobs:
           # Read configuration
           REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' triage.config.json)
           CUSTOM_PROMPT_PATH=$(jq -r '.analysis.custom_prompt_path // ""' triage.config.json)
+          GEMINI_MODEL=$(jq -r '.gemini.model // ""' triage.config.json)
           
           echo "Using repomix output: $REPOMIX_OUTPUT"
           if [ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ]; then
             echo "Using custom prompt: $CUSTOM_PROMPT_PATH"
+          fi
+          if [ -n "$GEMINI_MODEL" ] && [ "$GEMINI_MODEL" != "null" ]; then
+            echo "Using Gemini model: $GEMINI_MODEL"
+          else
+            echo "Using default Gemini model: gemini-2.0-flash-001"
           fi
           
           # Verify required files exist
@@ -330,6 +336,10 @@ jobs:
               CLI_ARGS="$CLI_ARGS --custom-prompt \"../$CUSTOM_PROMPT_PATH\""
             fi
             
+            if [ -n "$GEMINI_MODEL" ] && [ "$GEMINI_MODEL" != "null" ]; then
+              CLI_ARGS="$CLI_ARGS --model \"$GEMINI_MODEL\""
+            fi
+            
             # Run analysis (JSON format)
             echo "Running analysis..."
             eval "python -m cli.analyze $CLI_ARGS --format json --output analysis_result_${ISSUE_NUMBER}.json --quiet" || {
@@ -352,8 +362,8 @@ jobs:
             
             cd ..
             
-            # Post analysis comment (write to file first to avoid escaping issues)
-            printf "## Updated AI Analysis\n\n*This analysis was updated following recent changes to the codebase.*\n\n%s" "$ANALYSIS_TEXT" > "analysis_comment_${ISSUE_NUMBER}.md"
+            # Post analysis comment (already beautifully formatted, no wrapper needed)
+            printf "%s" "$ANALYSIS_TEXT" > "analysis_comment_${ISSUE_NUMBER}.md"
             gh issue comment "$ISSUE_NUMBER" --body-file "analysis_comment_${ISSUE_NUMBER}.md" || echo "Failed to post analysis comment"
             
             # Update labels

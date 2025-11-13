@@ -369,6 +369,7 @@ jobs:
           # Read configuration
           REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' ../triage.config.json)
           CUSTOM_PROMPT=$(jq -r '.analysis.custom_prompt_path' ../triage.config.json)
+          GEMINI_MODEL=$(jq -r '.gemini.model // ""' ../triage.config.json)
           
           # Build CLI arguments
           CLI_ARGS="--title \"$ISSUE_TITLE\" --description \"$ISSUE_DESCRIPTION\" --source-path \"$REPOMIX_OUTPUT\""
@@ -381,6 +382,14 @@ jobs:
             else
               echo "Warning: Custom prompt file not found: $CUSTOM_PROMPT, using default prompt"
             fi
+          fi
+          
+          # Add Gemini model if specified
+          if [ -n "$GEMINI_MODEL" ] && [ "$GEMINI_MODEL" != "null" ] && [ "$GEMINI_MODEL" != "" ]; then
+            CLI_ARGS="$CLI_ARGS --model \"$GEMINI_MODEL\""
+            echo "Using Gemini model: $GEMINI_MODEL"
+          else
+            echo "Using default Gemini model: gemini-2.0-flash-001"
           fi
           
           # Run the CLI analysis using environment variables

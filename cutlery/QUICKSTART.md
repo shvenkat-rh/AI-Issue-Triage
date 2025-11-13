@@ -175,7 +175,7 @@ Copy all four workflows and use labels to control which issues get analyzed:
 
 Create `triage.config.json` in your repository root. You can use the provided example as a template:
 
-**Example**: See `cutlery/triage.config.json` for a complete example.
+**Example**: See `cutlery/triage.config.json` for a complete example template with all optional fields.
 
 Create your own `triage.config.json`:
 
@@ -192,11 +192,17 @@ Create your own `triage.config.json`:
   "analysis": {
     "custom_prompt_path": "",
     "description": "Optional: Path to custom prompt template file for AI analysis (leave empty to use default ansible-creator prompt)"
+  },
+  "gemini": {
+    "model": "gemini-2.0-flash-001",
+    "description": "Optional: Gemini model to use (leave empty or remove to use default)"
   }
 }
 ```
 
-**Important**: Replace `YOUR-ORG/YOUR-REPO` with your actual GitHub organization and repository name.
+**Important**: 
+- Replace `YOUR-ORG/YOUR-REPO` with your actual GitHub organization and repository name.
+- The `gemini.model` field is optional. You can omit it to use the default model.
 
 ### Step 3: Add Gemini API Key to GitHub Secrets
 
@@ -307,6 +313,24 @@ This is your main configuration file with three sections:
 - Leave empty (`""`) to use the default prompt. The default prompt is specific to `ansible-creator`.
 - See [Custom Prompts](#custom-prompts) section below
 
+#### 4. Gemini Model Configuration
+
+```json
+"gemini": {
+  "model": "gemini-2.0-flash-001",
+  "description": "Gemini model to use for analysis"
+}
+```
+
+- **model**: Gemini model name to use (optional)
+- Leave empty or remove this section to use the default: `gemini-2.0-flash-001`
+- **Available models**:
+  - `gemini-2.0-flash-001` (Default) - Latest, fastest, cost-effective
+  - `gemini-1.5-pro` - More powerful for complex analysis
+  - `gemini-1.5-flash` - Previous generation fast model
+  - Other models from [Google AI Studio](https://ai.google.dev/models)
+- **Note**: Different models have different pricing and rate limits
+
 ---
 
 ## Customization
@@ -409,6 +433,31 @@ git add prompt.txt triage.config.json
 git commit -m "Add custom analysis prompt"
 git push origin main
 ```
+
+### Using a Different Gemini Model
+
+You can specify which Gemini model to use for analysis:
+
+**In `triage.config.json`**:
+
+```json
+{
+  "gemini": {
+    "model": "gemini-1.5-pro"
+  }
+}
+```
+
+**Available models**:
+- `gemini-2.0-flash-001` - Default, latest, fastest
+- `gemini-1.5-pro` - More powerful, better for complex issues
+- `gemini-1.5-flash` - Previous generation
+- Check [Google AI Studio](https://ai.google.dev/models) for more options
+
+**When to use different models**:
+- **gemini-2.0-flash-001**: General use, cost-effective
+- **gemini-1.5-pro**: Complex codebases, detailed analysis needed
+- **gemini-1.5-flash**: If 2.0 has issues or for backward compatibility
 
 ### Analyzing a Different Repository
 

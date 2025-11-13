@@ -17,11 +17,12 @@ load_dotenv()
 class GeminiDuplicateAnalyzer:
     """Analyzer that uses Google's Gemini AI to detect duplicate issues."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
         """Initialize the Gemini duplicate analyzer.
 
         Args:
             api_key: Gemini API key. If not provided, will use GEMINI_API_KEY env var.
+            model_name: Gemini model name. If not provided, defaults to gemini-2.0-flash-001.
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
@@ -29,7 +30,7 @@ class GeminiDuplicateAnalyzer:
 
         # Initialize the Gen AI client
         self.client = genai.Client(api_key=self.api_key)
-        self.model_name = "gemini-2.0-flash-001"
+        self.model_name = model_name or "gemini-2.0-flash-001"
 
     def detect_duplicate(
         self, new_issue_title: str, new_issue_description: str, existing_issues: List[IssueReference], max_retries: int = 2
