@@ -195,6 +195,16 @@ jobs:
             
             echo "Title: $ISSUE_TITLE"
             
+            # Check if issue has "Bypass Prompt Injection Check" label
+            ISSUE_LABELS=$(echo "$ISSUE_DATA" | jq -r '.labels[]' | tr '\n' ',' | sed 's/,$//')
+            echo "Issue labels: $ISSUE_LABELS"
+            
+            BYPASS_INJECTION="false"
+            if echo "$ISSUE_LABELS" | grep -q "Bypass Prompt Injection Check"; then
+              BYPASS_INJECTION="true"
+              echo "⚡ Bypass Prompt Injection Check label detected - skipping security check"
+            fi
+            
             # ==================== PROMPT INJECTION CHECK ====================
             echo ""
             echo ">>> Step 1: Checking for prompt injection..."
@@ -203,7 +213,11 @@ jobs:
             HAS_INJECTION="false"
             RISK_LEVEL="safe"
             
-            if [ -f "utils/security/prompt_injection.py" ]; then
+            if [ "$BYPASS_INJECTION" = "true" ]; then
+              echo "Prompt injection check bypassed by user label"
+              HAS_INJECTION="false"
+              RISK_LEVEL="safe"
+            elif [ -f "utils/security/prompt_injection.py" ]; then
               if python3 -m utils.security.prompt_injection "$ISSUE_TITLE" "$ISSUE_BODY" > "prompt_injection_${ISSUE_NUMBER}.json" 2>"prompt_injection_debug_${ISSUE_NUMBER}.log"; then
                 echo "Prompt injection detection completed"
               else
@@ -225,37 +239,39 @@ jobs:
             
             cd ..
             
-            # Post prompt injection report
-            RISK_EMOJI="✅"
-            case "$RISK_LEVEL" in
-              critical) RISK_EMOJI="🚨" ;;
-              high) RISK_EMOJI="⚠️" ;;
-              medium) RISK_EMOJI="⚡" ;;
-              low) RISK_EMOJI="ℹ️" ;;
-            esac
-            
-            INJECTION_COMMENT="${RISK_EMOJI} **Prompt Injection Analysis Report**\n\n**Risk Level:** $(echo $RISK_LEVEL | tr '[:lower:]' '[:upper:]')\n\n"
-            
-            if [ "$RISK_LEVEL" = "safe" ]; then
-              INJECTION_COMMENT="${INJECTION_COMMENT}This issue has been analyzed and appears to be safe. No prompt injection patterns were detected.\n\n"
-              INJECTION_COMMENT="${INJECTION_COMMENT}**Analysis Result:** ✅ SAFE\n\n"
-            elif [ "$RISK_LEVEL" = "critical" ] || [ "$RISK_LEVEL" = "high" ]; then
-              INJECTION_COMMENT="${INJECTION_COMMENT}**⚠️ SECURITY ALERT**\n\nThis issue contains content that appears to be a prompt injection attempt. For security reasons, this issue will not be processed by the AI analysis system.\n\n"
+            # Post prompt injection report (skip if bypassed)
+            if [ "$BYPASS_INJECTION" != "true" ]; then
+              RISK_EMOJI="✅"
+              case "$RISK_LEVEL" in
+                critical) RISK_EMOJI="🚨" ;;
+                high) RISK_EMOJI="⚠️" ;;
+                medium) RISK_EMOJI="⚡" ;;
+                low) RISK_EMOJI="ℹ️" ;;
+              esac
               
-              # Add security labels
-              gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-blocked" || echo "Failed to add labels"
-            else
-              INJECTION_COMMENT="${INJECTION_COMMENT}This issue contains content that may contain prompt injection patterns, but the risk level is manageable. Processing will continue with caution.\n\n"
+              INJECTION_COMMENT="${RISK_EMOJI} **Prompt Injection Analysis Report**\n\n**Risk Level:** $(echo $RISK_LEVEL | tr '[:lower:]' '[:upper:]')\n\n"
               
-              # Add warning label
-              gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-warning" || echo "Failed to add labels"
+              if [ "$RISK_LEVEL" = "safe" ]; then
+                INJECTION_COMMENT="${INJECTION_COMMENT}This issue has been analyzed and appears to be safe. No prompt injection patterns were detected.\n\n"
+                INJECTION_COMMENT="${INJECTION_COMMENT}**Analysis Result:** ✅ SAFE\n\n"
+              elif [ "$RISK_LEVEL" = "critical" ] || [ "$RISK_LEVEL" = "high" ]; then
+                INJECTION_COMMENT="${INJECTION_COMMENT}**⚠️ SECURITY ALERT**\n\nThis issue contains content that appears to be a prompt injection attempt. For security reasons, this issue will not be processed by the AI analysis system.\n\n"
+                
+                # Add security labels
+                gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-blocked" || echo "Failed to add labels"
+              else
+                INJECTION_COMMENT="${INJECTION_COMMENT}This issue contains content that may contain prompt injection patterns, but the risk level is manageable. Processing will continue with caution.\n\n"
+                
+                # Add warning label
+                gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-warning" || echo "Failed to add labels"
+              fi
+              
+              INJECTION_COMMENT="${INJECTION_COMMENT}---\n*This security check is performed automatically to protect the AI analysis system.*"
+              
+              # Post comment (write to file first to avoid escaping issues)
+              printf "%b" "$INJECTION_COMMENT" > "injection_comment_${ISSUE_NUMBER}.md"
+              gh issue comment "$ISSUE_NUMBER" --body-file "injection_comment_${ISSUE_NUMBER}.md" || echo "Failed to post injection comment"
             fi
-            
-            INJECTION_COMMENT="${INJECTION_COMMENT}---\n*This security check is performed automatically to protect the AI analysis system.*"
-            
-            # Post comment (write to file first to avoid escaping issues)
-            printf "%b" "$INJECTION_COMMENT" > "injection_comment_${ISSUE_NUMBER}.md"
-            gh issue comment "$ISSUE_NUMBER" --body-file "injection_comment_${ISSUE_NUMBER}.md" || echo "Failed to post injection comment"
             
             # Skip analysis for high/critical risk
             if [ "$RISK_LEVEL" = "critical" ] || [ "$RISK_LEVEL" = "high" ]; then
