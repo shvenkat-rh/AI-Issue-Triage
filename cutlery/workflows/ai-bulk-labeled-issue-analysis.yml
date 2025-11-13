@@ -112,6 +112,55 @@ jobs:
             console.log(`Saved ${issueNumbers.length} issue numbers to issue_numbers.txt`);
             console.log(`Issue numbers: ${issueNumbers.join(', ')}`);
       
+      - name: Ensure Labels Exist with Colors
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Define label colors and descriptions
+            const labelDefinitions = {
+              'gemini-analyzed': { color: '0E8A16', description: '✅ Analyzed by Gemini AI' },
+              'duplicate': { color: 'CFD3D7', description: '🔄 Duplicate issue' },
+              'security-alert': { color: 'B60205', description: '⚠️ Security Alert' },
+              'prompt-injection-blocked': { color: 'D93F0B', description: '🚫 High-risk injection blocked' },
+              'prompt-injection-warning': { color: 'FBCA04', description: '⚡ Low-risk injection detected' },
+              'type:bug': { color: 'D73A4A', description: '🐛 Bug - Something isn\'t working' },
+              'type:enhancement': { color: 'A2EEEF', description: '✨ Enhancement - New feature' },
+              'type:feature-request': { color: 'BFD4F2', description: '💡 Feature Request' },
+              'type:documentation': { color: '0075CA', description: '📚 Documentation' },
+              'type:question': { color: 'D876E3', description: '❓ Question' },
+              'type:performance': { color: 'FBCA04', description: '⚡ Performance' },
+              'type:security': { color: 'B60205', description: '🔒 Security' },
+              'type:refactoring': { color: 'C5DEF5', description: '♻️ Refactoring' },
+              'severity:critical': { color: 'B60205', description: '🚨 Critical priority' },
+              'severity:high': { color: 'D93F0B', description: '🔴 High priority' },
+              'severity:medium': { color: 'FBCA04', description: '🟡 Medium priority' },
+              'severity:low': { color: '0E8A16', description: '🟢 Low priority' }
+            };
+            
+            // Create labels if they don't exist
+            console.log('Ensuring labels exist with proper colors...');
+            for (const [name, config] of Object.entries(labelDefinitions)) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: name
+                });
+              } catch (error) {
+                if (error.status === 404) {
+                  console.log(`Creating label: ${name} (${config.color})`);
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: name,
+                    color: config.color,
+                    description: config.description
+                  });
+                }
+              }
+            }
+            console.log('Labels ready!');
+      
       - name: Process labeled issues
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -380,6 +429,22 @@ jobs:
               ISSUE_TYPE=$(jq -r '.issue_type // ""' "ai-triage/analysis_result_${ISSUE_NUMBER}.json")
               SEVERITY=$(jq -r '.severity // ""' "ai-triage/analysis_result_${ISSUE_NUMBER}.json")
               
+              # Get current labels and remove old type:* and severity:* labels
+              echo "Fetching current labels for issue #$ISSUE_NUMBER..."
+              CURRENT_LABELS=$(gh issue view "$ISSUE_NUMBER" --json labels --jq '.labels[].name' | tr '\n' ',' | sed 's/,$//')
+              echo "Current labels: $CURRENT_LABELS"
+              
+              # Remove old type:* and severity:* labels
+              if [ -n "$CURRENT_LABELS" ]; then
+                for label in $(echo "$CURRENT_LABELS" | tr ',' '\n'); do
+                  if [[ "$label" == type:* ]] || [[ "$label" == severity:* ]]; then
+                    echo "Removing old label: $label"
+                    gh issue edit "$ISSUE_NUMBER" --remove-label "$label" || echo "Failed to remove label: $label"
+                  fi
+                done
+              fi
+              
+              # Add new labels
               LABELS_TO_ADD="gemini-analyzed"
               if [ -n "$ISSUE_TYPE" ] && [ "$ISSUE_TYPE" != "null" ]; then
                 LABELS_TO_ADD="${LABELS_TO_ADD},type:${ISSUE_TYPE}"
@@ -388,6 +453,7 @@ jobs:
                 LABELS_TO_ADD="${LABELS_TO_ADD},severity:${SEVERITY}"
               fi
               
+              echo "Adding new labels: $LABELS_TO_ADD"
               gh issue edit "$ISSUE_NUMBER" --add-label "$LABELS_TO_ADD" || echo "Failed to update labels"
             fi
             

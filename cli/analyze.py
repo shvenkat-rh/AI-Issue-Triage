@@ -245,7 +245,7 @@ def format_analysis_text(analysis) -> str:
     type_emoji = type_map.get(analysis.issue_type.value.lower(), "📋")
 
     # Header with title and badges
-    output.append("# 🤖 AI Analysis Report")
+    output.append("# 🤖 Gemini Analysis Report")
     output.append("")
     output.append(f"**Issue:** {analysis.title}")
     output.append("")
