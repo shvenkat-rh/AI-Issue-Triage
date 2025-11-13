@@ -256,12 +256,8 @@ def run_duplicate_detection(args):
 
         # Load existing issues
         existing_issues = load_issues_from_file(args.issues)
-        if args.output != "json":
-            print(f"Loaded {len(existing_issues)} existing issues")
 
         # Perform duplicate detection
-        if args.output != "json":
-            print(f"Checking for duplicates...")
         result = analyzer.detect_duplicate(args.title, args.description, existing_issues)
 
         # Output results
