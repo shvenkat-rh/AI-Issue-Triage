@@ -6,8 +6,8 @@ on:
 
 jobs:
   analyze-issue:
-    # Run if the issue has "Gemini Analyze" OR "Bypass Prompt Injection Check" label
-    if: contains(github.event.issue.labels.*.name, 'Gemini Analyze') || contains(github.event.issue.labels.*.name, 'Bypass Prompt Injection Check')
+    # Run if the issue has "Gemini Analyze" OR ("gemini analyze" AND "Bypass Prompt Injection Check")
+    if: contains(github.event.issue.labels.*.name, 'Gemini Analyze') || (contains(github.event.issue.labels.*.name, 'Gemini Analyze') && contains(github.event.issue.labels.*.name, 'Bypass Prompt Injection Check'))
     runs-on: ubuntu-latest
     
     permissions:

@@ -349,7 +349,7 @@ def run_interactive_mode(issues_file: str, api_key: str, model_name: str = None)
 def output_text(result, title: str):
     """Output results in beautiful GitHub-flavored Markdown format."""
     output = []
-    
+
     # Determine status emoji and badge
     if result.is_duplicate:
         status_emoji = "🔄"
@@ -359,20 +359,20 @@ def output_text(result, title: str):
         status_emoji = "✅"
         status_badge = "NO DUPLICATE FOUND"
         status_color = "green"
-    
+
     # Calculate confidence percentage
     confidence_percent = int(result.confidence_score * 100)
     confidence_emoji = "🎯" if confidence_percent >= 80 else "📊"
-    
+
     # Similarity percentage
     similarity_percent = int(result.similarity_score * 100)
-    
+
     # Header
     output.append("# 🔍 Duplicate Detection Report")
     output.append("")
     output.append(f"**Issue:** {title}")
     output.append("")
-    
+
     # Status badges
     output.append(f"{status_emoji} **Status:** `{status_badge}`  ")
     output.append(f"📊 **Similarity Score:** `{similarity_percent}%`  ")
@@ -381,14 +381,14 @@ def output_text(result, title: str):
     output.append("")
     output.append("---")
     output.append("")
-    
+
     # Duplicate Information (if found)
     if result.is_duplicate and result.duplicate_of:
         output.append("## 🎯 Duplicate Match Found")
         output.append("")
         output.append("This issue appears to be a duplicate of an existing issue.")
         output.append("")
-        
+
         # Duplicate details in a table
         output.append("| Property | Value |")
         output.append("|----------|-------|")
@@ -398,7 +398,7 @@ def output_text(result, title: str):
         if result.duplicate_of.url:
             output.append(f"| **URL** | [View Issue]({result.duplicate_of.url}) |")
         output.append("")
-        
+
         # Similarity reasons
         if result.similarity_reasons:
             output.append("<details>")
@@ -414,7 +414,7 @@ def output_text(result, title: str):
         output.append("")
         output.append("This issue appears to be **unique** based on analysis of existing issues.")
         output.append("")
-        
+
         # Still show similarity reasons if they exist (low confidence matches)
         if result.similarity_reasons:
             output.append("<details>")
@@ -427,26 +427,30 @@ def output_text(result, title: str):
             output.append("")
             output.append("</details>")
             output.append("")
-    
+
     output.append("---")
     output.append("")
-    
+
     # Recommendation section
     output.append("## 💡 Recommendation")
     output.append("")
     output.append(f"> {result.recommendation}")
     output.append("")
-    
+
     # Metrics details
     output.append("<details>")
     output.append("<summary><b>📊 Analysis Metrics</b></summary>")
     output.append("")
     output.append("| Metric | Score | Interpretation |")
     output.append("|--------|-------|----------------|")
-    output.append(f"| **Similarity** | `{similarity_percent}%` | "
-                 f"{'High' if similarity_percent >= 70 else 'Medium' if similarity_percent >= 40 else 'Low'} |")
-    output.append(f"| **Confidence** | `{confidence_percent}%` | "
-                 f"{'High' if confidence_percent >= 80 else 'Medium' if confidence_percent >= 60 else 'Low'} |")
+    output.append(
+        f"| **Similarity** | `{similarity_percent}%` | "
+        f"{'High' if similarity_percent >= 70 else 'Medium' if similarity_percent >= 40 else 'Low'} |"
+    )
+    output.append(
+        f"| **Confidence** | `{confidence_percent}%` | "
+        f"{'High' if confidence_percent >= 80 else 'Medium' if confidence_percent >= 60 else 'Low'} |"
+    )
     output.append("")
     output.append("**Confidence Level Guide:**")
     output.append("- `80-100%`: Very confident in the assessment")
@@ -455,11 +459,11 @@ def output_text(result, title: str):
     output.append("")
     output.append("</details>")
     output.append("")
-    
+
     # Footer
     output.append("---")
     output.append("*This duplicate detection was performed automatically using AI analysis.*")
-    
+
     print("\n".join(output))
 
 
