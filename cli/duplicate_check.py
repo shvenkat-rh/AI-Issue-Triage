@@ -347,29 +347,120 @@ def run_interactive_mode(issues_file: str, api_key: str, model_name: str = None)
 
 
 def output_text(result, title: str):
-    """Output results in text format."""
-    print(f"\nDUPLICATE DETECTION RESULTS")
-    print("=" * 50)
-    print(f"Issue Title: {title}")
-    print(f"Is Duplicate: {'YES' if result.is_duplicate else 'NO'}")
-    print(f"Similarity Score: {result.similarity_score:.2f}")
-    print(f"Confidence Score: {result.confidence_score:.2f}")
-
+    """Output results in beautiful GitHub-flavored Markdown format."""
+    output = []
+    
+    # Determine status emoji and badge
+    if result.is_duplicate:
+        status_emoji = "🔄"
+        status_badge = "DUPLICATE DETECTED"
+        status_color = "orange"
+    else:
+        status_emoji = "✅"
+        status_badge = "NO DUPLICATE FOUND"
+        status_color = "green"
+    
+    # Calculate confidence percentage
+    confidence_percent = int(result.confidence_score * 100)
+    confidence_emoji = "🎯" if confidence_percent >= 80 else "📊"
+    
+    # Similarity percentage
+    similarity_percent = int(result.similarity_score * 100)
+    
+    # Header
+    output.append("# 🔍 Duplicate Detection Report")
+    output.append("")
+    output.append(f"**Issue:** {title}")
+    output.append("")
+    
+    # Status badges
+    output.append(f"{status_emoji} **Status:** `{status_badge}`  ")
+    output.append(f"📊 **Similarity Score:** `{similarity_percent}%`  ")
+    output.append(f"{confidence_emoji} **Confidence:** `{confidence_percent}%`  ")
+    output.append(f"⏰ **Checked:** `{datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}`")
+    output.append("")
+    output.append("---")
+    output.append("")
+    
+    # Duplicate Information (if found)
     if result.is_duplicate and result.duplicate_of:
-        print(f"\nDUPLICATE OF:")
-        print(f"   ID: {result.duplicate_of.issue_id}")
-        print(f"   Title: {result.duplicate_of.title}")
-        print(f"   Status: {result.duplicate_of.status}")
+        output.append("## 🎯 Duplicate Match Found")
+        output.append("")
+        output.append("This issue appears to be a duplicate of an existing issue.")
+        output.append("")
+        
+        # Duplicate details in a table
+        output.append("| Property | Value |")
+        output.append("|----------|-------|")
+        output.append(f"| **Issue ID** | #{result.duplicate_of.issue_id} |")
+        output.append(f"| **Title** | {result.duplicate_of.title} |")
+        output.append(f"| **Status** | `{result.duplicate_of.status.upper()}` |")
         if result.duplicate_of.url:
-            print(f"   URL: {result.duplicate_of.url}")
-
-    if result.similarity_reasons:
-        print(f"\nSIMILARITY REASONS:")
-        for reason in result.similarity_reasons:
-            print(f"   • {reason}")
-
-    print(f"\nRECOMMENDATION:")
-    print(f"   {result.recommendation}")
+            output.append(f"| **URL** | [View Issue]({result.duplicate_of.url}) |")
+        output.append("")
+        
+        # Similarity reasons
+        if result.similarity_reasons:
+            output.append("<details>")
+            output.append("<summary><b>📋 Why These Issues Are Similar</b></summary>")
+            output.append("")
+            for reason in result.similarity_reasons:
+                output.append(f"- {reason}")
+            output.append("")
+            output.append("</details>")
+            output.append("")
+    else:
+        output.append("## ✅ No Duplicate Found")
+        output.append("")
+        output.append("This issue appears to be **unique** based on analysis of existing issues.")
+        output.append("")
+        
+        # Still show similarity reasons if they exist (low confidence matches)
+        if result.similarity_reasons:
+            output.append("<details>")
+            output.append("<summary><b>🔍 Similar Issues Checked</b></summary>")
+            output.append("")
+            output.append("Some similarities were found, but not strong enough to consider this a duplicate:")
+            output.append("")
+            for reason in result.similarity_reasons:
+                output.append(f"- {reason}")
+            output.append("")
+            output.append("</details>")
+            output.append("")
+    
+    output.append("---")
+    output.append("")
+    
+    # Recommendation section
+    output.append("## 💡 Recommendation")
+    output.append("")
+    output.append(f"> {result.recommendation}")
+    output.append("")
+    
+    # Metrics details
+    output.append("<details>")
+    output.append("<summary><b>📊 Analysis Metrics</b></summary>")
+    output.append("")
+    output.append("| Metric | Score | Interpretation |")
+    output.append("|--------|-------|----------------|")
+    output.append(f"| **Similarity** | `{similarity_percent}%` | "
+                 f"{'High' if similarity_percent >= 70 else 'Medium' if similarity_percent >= 40 else 'Low'} |")
+    output.append(f"| **Confidence** | `{confidence_percent}%` | "
+                 f"{'High' if confidence_percent >= 80 else 'Medium' if confidence_percent >= 60 else 'Low'} |")
+    output.append("")
+    output.append("**Confidence Level Guide:**")
+    output.append("- `80-100%`: Very confident in the assessment")
+    output.append("- `60-79%`: Moderately confident, review recommended")
+    output.append("- `0-59%`: Low confidence, manual review needed")
+    output.append("")
+    output.append("</details>")
+    output.append("")
+    
+    # Footer
+    output.append("---")
+    output.append("*This duplicate detection was performed automatically using AI analysis.*")
+    
+    print("\n".join(output))
 
 
 def output_json(result):
