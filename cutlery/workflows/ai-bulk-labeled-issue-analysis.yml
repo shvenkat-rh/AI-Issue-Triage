@@ -279,34 +279,42 @@ jobs:
               
               cd ai-triage
               if python -m cli.duplicate_check --title "$ISSUE_TITLE" --description "$ISSUE_BODY" --issues existing_issues_analyzed.json --output json > "duplicate_result_${ISSUE_NUMBER}.json" 2>&1; then
-                IS_DUPLICATE=$(jq -r '.is_duplicate // false' "duplicate_result_${ISSUE_NUMBER}.json")
-                echo "Duplicate check result: $IS_DUPLICATE"
-                
-                if [ "$IS_DUPLICATE" = "true" ]; then
-                  DUPLICATE_OF=$(jq -r '.duplicate_of.issue_id' "duplicate_result_${ISSUE_NUMBER}.json")
-                  CONFIDENCE=$(jq -r '.confidence_score // 0' "duplicate_result_${ISSUE_NUMBER}.json")
-                  REASONING=$(jq -r '.reasoning // "Similar issue detected"' "duplicate_result_${ISSUE_NUMBER}.json")
+                # Validate JSON before parsing
+                if jq empty "duplicate_result_${ISSUE_NUMBER}.json" 2>/dev/null; then
+                  IS_DUPLICATE=$(jq -r '.is_duplicate // false' "duplicate_result_${ISSUE_NUMBER}.json")
+                  echo "Duplicate check result: $IS_DUPLICATE"
                   
-                  echo "Issue #$ISSUE_NUMBER is a DUPLICATE of issue #$DUPLICATE_OF"
-                  
-                  # Add duplicate label
-                  cd ..
-                  gh issue edit "$ISSUE_NUMBER" --add-label "duplicate" || echo "Failed to add duplicate label"
-                  
-                  # Post duplicate comment
-                  CONFIDENCE_PERCENT=$(echo "scale=0; $CONFIDENCE * 100 / 1" | bc)
-                  DUP_COMMENT="## Duplicate Issue Detected\n\nThis issue appears to be a duplicate of #${DUPLICATE_OF}.\n\n"
-                  DUP_COMMENT="${DUP_COMMENT}**Confidence Score:** ${CONFIDENCE_PERCENT}%\n\n"
-                  DUP_COMMENT="${DUP_COMMENT}**Reasoning:** $REASONING\n\n"
-                  DUP_COMMENT="${DUP_COMMENT}Please review the original issue before continuing with this one.\n\n"
-                  DUP_COMMENT="${DUP_COMMENT}---\n*This check was performed during bulk analysis.*"
-                  
-                  # Post comment (write to file first to avoid escaping issues)
-                  printf "%b" "$DUP_COMMENT" > "duplicate_comment_${ISSUE_NUMBER}.md"
-                  gh issue comment "$ISSUE_NUMBER" --body-file "duplicate_comment_${ISSUE_NUMBER}.md" || echo "Failed to post duplicate comment"
-                  
-                  echo "Skipping full AI analysis for duplicate issue"
-                  continue
+                  if [ "$IS_DUPLICATE" = "true" ]; then
+                    DUPLICATE_OF=$(jq -r '.duplicate_of.issue_id' "duplicate_result_${ISSUE_NUMBER}.json")
+                    CONFIDENCE=$(jq -r '.confidence_score // 0' "duplicate_result_${ISSUE_NUMBER}.json")
+                    REASONING=$(jq -r '.reasoning // "Similar issue detected"' "duplicate_result_${ISSUE_NUMBER}.json")
+                    
+                    echo "Issue #$ISSUE_NUMBER is a DUPLICATE of issue #$DUPLICATE_OF"
+                    
+                    # Add duplicate label
+                    cd ..
+                    gh issue edit "$ISSUE_NUMBER" --add-label "duplicate" || echo "Failed to add duplicate label"
+                    
+                    # Post duplicate comment
+                    CONFIDENCE_PERCENT=$(echo "scale=0; $CONFIDENCE * 100 / 1" | bc)
+                    DUP_COMMENT="## Duplicate Issue Detected\n\nThis issue appears to be a duplicate of #${DUPLICATE_OF}.\n\n"
+                    DUP_COMMENT="${DUP_COMMENT}**Confidence Score:** ${CONFIDENCE_PERCENT}%\n\n"
+                    DUP_COMMENT="${DUP_COMMENT}**Reasoning:** $REASONING\n\n"
+                    DUP_COMMENT="${DUP_COMMENT}Please review the original issue before continuing with this one.\n\n"
+                    DUP_COMMENT="${DUP_COMMENT}---\n*This check was performed during bulk analysis.*"
+                    
+                    # Post comment (write to file first to avoid escaping issues)
+                    printf "%b" "$DUP_COMMENT" > "duplicate_comment_${ISSUE_NUMBER}.md"
+                    gh issue comment "$ISSUE_NUMBER" --body-file "duplicate_comment_${ISSUE_NUMBER}.md" || echo "Failed to post duplicate comment"
+                    
+                    echo "Skipping full AI analysis for duplicate issue"
+                    continue
+                  fi
+                else
+                  echo "WARNING: duplicate_result_${ISSUE_NUMBER}.json contains invalid JSON"
+                  echo "Contents of duplicate_result_${ISSUE_NUMBER}.json:"
+                  cat "duplicate_result_${ISSUE_NUMBER}.json"
+                  IS_DUPLICATE="false"
                 fi
               else
                 echo "Duplicate detection failed, assuming not duplicate"

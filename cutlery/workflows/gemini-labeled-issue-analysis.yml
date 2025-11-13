@@ -344,15 +344,25 @@ jobs:
           
           # Check if duplicate was found
           if [ -f duplicate_result.json ]; then
-            IS_DUPLICATE=$(jq -r '.is_duplicate // false' duplicate_result.json)
-            echo "is_duplicate=$IS_DUPLICATE" >> $GITHUB_OUTPUT
-            
-            if [ "$IS_DUPLICATE" = "true" ]; then
-              DUPLICATE_ISSUE_URL=$(jq -r '.duplicate_issue_url // ""' duplicate_result.json)
-              DUPLICATE_ISSUE_NUMBER=$(jq -r '.duplicate_issue_number // ""' duplicate_result.json)
-              echo "duplicate_issue_url=$DUPLICATE_ISSUE_URL" >> $GITHUB_OUTPUT
-              echo "duplicate_issue_number=$DUPLICATE_ISSUE_NUMBER" >> $GITHUB_OUTPUT
-              echo "Duplicate issue found: $DUPLICATE_ISSUE_URL"
+            # Validate JSON before parsing
+            if jq empty duplicate_result.json 2>/dev/null; then
+              IS_DUPLICATE=$(jq -r '.is_duplicate // false' duplicate_result.json)
+              echo "is_duplicate=$IS_DUPLICATE" >> $GITHUB_OUTPUT
+              
+              if [ "$IS_DUPLICATE" = "true" ]; then
+                DUPLICATE_ISSUE_URL=$(jq -r '.duplicate_issue_url // ""' duplicate_result.json)
+                DUPLICATE_ISSUE_NUMBER=$(jq -r '.duplicate_issue_number // ""' duplicate_result.json)
+                echo "duplicate_issue_url=$DUPLICATE_ISSUE_URL" >> $GITHUB_OUTPUT
+                echo "duplicate_issue_number=$DUPLICATE_ISSUE_NUMBER" >> $GITHUB_OUTPUT
+                echo "Duplicate issue found: $DUPLICATE_ISSUE_URL"
+              fi
+            else
+              echo "WARNING: duplicate_result.json contains invalid JSON"
+              echo "Contents of duplicate_result.json:"
+              cat duplicate_result.json
+              # Set safe defaults
+              echo "is_duplicate=false" >> $GITHUB_OUTPUT
+              echo "Treating as non-duplicate due to JSON parsing error"
             fi
           fi
 
