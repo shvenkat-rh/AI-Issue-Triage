@@ -6,8 +6,10 @@ on:
 
 jobs:
   analyze-issue:
-    # Run if the issue has "Gemini Analyze" OR ("gemini analyze" AND "Bypass Prompt Injection Check")
-    if: contains(github.event.issue.labels.*.name, 'Gemini Analyze') || (contains(github.event.issue.labels.*.name, 'Gemini Analyze') && contains(github.event.issue.labels.*.name, 'Bypass Prompt Injection Check'))
+    # Run if the issue has "Gemini Analyze" OR "Gemini Analyze : Bypass Prompt Injection Check"
+    if: >
+      contains(github.event.issue.labels.*.name, 'Gemini Analyze') ||
+      contains(github.event.issue.labels.*.name, 'Gemini Analyze : Bypass Prompt Injection Check')
     runs-on: ubuntu-latest
     
     permissions:
@@ -452,8 +454,7 @@ jobs:
             const duplicateUrl = '${{ steps.duplicate-check.outputs.duplicate_issue_url }}';
             const duplicateNumber = '${{ steps.duplicate-check.outputs.duplicate_issue_number }}';
             
-            let comment = '**Duplicate Issue Detected**\n\n';
-            comment += duplicateText + '\n\n';
+            let comment = duplicateText + '\n\n';
             
             if (duplicateUrl) {
               comment += `**Related Issue**: ${duplicateUrl}\n`;

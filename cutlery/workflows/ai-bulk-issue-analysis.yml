@@ -312,7 +312,7 @@ jobs:
                     
                     # Post duplicate comment
                     CONFIDENCE_PERCENT=$(echo "scale=0; $CONFIDENCE * 100 / 1" | bc)
-                    DUP_COMMENT="## Duplicate Issue Detected\n\nThis issue appears to be a duplicate of #${DUPLICATE_OF}.\n\n"
+                    DUP_COMMENT="This issue appears to be a duplicate of #${DUPLICATE_OF}.\n\n"
                     DUP_COMMENT="${DUP_COMMENT}**Confidence Score:** ${CONFIDENCE_PERCENT}%\n\n"
                     DUP_COMMENT="${DUP_COMMENT}**Reasoning:** $REASONING\n\n"
                     DUP_COMMENT="${DUP_COMMENT}Please review the original issue before continuing with this one.\n\n"

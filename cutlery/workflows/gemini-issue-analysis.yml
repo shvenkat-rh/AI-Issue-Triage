@@ -449,8 +449,7 @@ jobs:
             const duplicateUrl = '${{ steps.duplicate-check.outputs.duplicate_issue_url }}';
             const duplicateNumber = '${{ steps.duplicate-check.outputs.duplicate_issue_number }}';
             
-            let comment = '**Duplicate Issue Detected**\n\n';
-            comment += duplicateText + '\n\n';
+            let comment = duplicateText + '\n\n';
             
             if (duplicateUrl) {
               comment += `**Related Issue**: ${duplicateUrl}\n`;

@@ -80,20 +80,24 @@ jobs:
           script: |
             const fs = require('fs');
             
-            // Get all open issues with "Gemini Analyze" label (oldest first for duplicate detection)
+            // Get all open issues (oldest first for duplicate detection)
             const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'Gemini Analyze',
               per_page: 100,
               sort: 'created',
               direction: 'asc'  // Oldest first
             });
             
-            // Filter out pull requests
-            const actualIssues = issues.filter(issue => !issue.pull_request);
-            console.log(`Found ${actualIssues.length} open issues with "Gemini Analyze" label (processing oldest → newest)`);
+            // Filter for issues with "Gemini Analyze" OR "Gemini Analyze : Bypass Prompt Injection Check" labels
+            const actualIssues = issues.filter(issue => {
+              if (issue.pull_request) return false;
+              const labelNames = issue.labels.map(l => l.name);
+              return labelNames.includes('Gemini Analyze') || 
+                     labelNames.includes('Gemini Analyze : Bypass Prompt Injection Check');
+            });
+            console.log(`Found ${actualIssues.length} open issues with "Gemini Analyze" or "Gemini Analyze : Bypass Prompt Injection Check" label (processing oldest → newest)`);
             
             // Save issue numbers to file for bash processing
             const issueNumbers = actualIssues.map(i => i.number);
@@ -153,10 +157,10 @@ jobs:
           
           ISSUE_COUNT_TOTAL=$(wc -l < issue_numbers.txt | tr -d ' ')
           if [ "$ISSUE_COUNT_TOTAL" -eq 0 ]; then
-            echo "No issues with 'Gemini Analyze' label to process. Exiting successfully."
+            echo "No issues with 'Gemini Analyze' or 'Gemini Analyze : Bypass Prompt Injection Check' label to process. Exiting successfully."
             exit 0
           fi
-          echo "✓ Found $ISSUE_COUNT_TOTAL issues with 'Gemini Analyze' label to process"
+          echo "✓ Found $ISSUE_COUNT_TOTAL issues with 'Gemini Analyze' or 'Gemini Analyze : Bypass Prompt Injection Check' label to process"
           echo "Issue numbers from file: $(cat issue_numbers.txt | tr '\n' ', ' | sed 's/,$//')"
           
           if [ ! -f "all_issues.json" ]; then
@@ -313,7 +317,7 @@ jobs:
                     
                     # Post duplicate comment
                     CONFIDENCE_PERCENT=$(echo "scale=0; $CONFIDENCE * 100 / 1" | bc)
-                    DUP_COMMENT="## Duplicate Issue Detected\n\nThis issue appears to be a duplicate of #${DUPLICATE_OF}.\n\n"
+                    DUP_COMMENT="This issue appears to be a duplicate of #${DUPLICATE_OF}.\n\n"
                     DUP_COMMENT="${DUP_COMMENT}**Confidence Score:** ${CONFIDENCE_PERCENT}%\n\n"
                     DUP_COMMENT="${DUP_COMMENT}**Reasoning:** $REASONING\n\n"
                     DUP_COMMENT="${DUP_COMMENT}Please review the original issue before continuing with this one.\n\n"
