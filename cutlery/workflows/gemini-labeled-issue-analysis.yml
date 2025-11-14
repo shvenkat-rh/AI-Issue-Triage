@@ -83,7 +83,7 @@ jobs:
 
       - name: Check for prompt injection
         id: prompt-injection
-        if: "!contains(github.event.issue.labels.*.name, 'Bypass Prompt Injection Check')"
+        if: "!contains(github.event.issue.labels.*.name, 'Gemini Analyze : Bypass Prompt Injection Check')"
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_DESCRIPTION: ${{ github.event.issue.body }}
