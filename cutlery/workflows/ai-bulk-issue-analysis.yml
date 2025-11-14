@@ -293,6 +293,7 @@ jobs:
               jq '[.[] | {issue_id: .number, title: .title, description: .body, status: "open", url: .html_url}]' analyzed_issues.json > ai-triage/existing_issues_analyzed.json
               
               cd ai-triage
+              # Run duplicate check twice: once for JSON (to check if duplicate), once for nice text output
               if python -m cli.duplicate_check --title "$ISSUE_TITLE" --description "$ISSUE_BODY" --issues existing_issues_analyzed.json --output json > "duplicate_result_${ISSUE_NUMBER}.json" 2>&1; then
                 # Validate JSON before parsing
                 if jq empty "duplicate_result_${ISSUE_NUMBER}.json" 2>/dev/null; then
@@ -301,8 +302,6 @@ jobs:
                   
                   if [ "$IS_DUPLICATE" = "true" ]; then
                     DUPLICATE_OF=$(jq -r '.duplicate_of.issue_id' "duplicate_result_${ISSUE_NUMBER}.json")
-                    CONFIDENCE=$(jq -r '.confidence_score // 0' "duplicate_result_${ISSUE_NUMBER}.json")
-                    REASONING=$(jq -r '.reasoning // "Similar issue detected"' "duplicate_result_${ISSUE_NUMBER}.json")
                     
                     echo "Issue #$ISSUE_NUMBER is a DUPLICATE of issue #$DUPLICATE_OF"
                     
@@ -310,13 +309,14 @@ jobs:
                     cd ..
                     gh issue edit "$ISSUE_NUMBER" --add-label "duplicate" || echo "Failed to add duplicate label"
                     
-                    # Post duplicate comment
-                    CONFIDENCE_PERCENT=$(echo "scale=0; $CONFIDENCE * 100 / 1" | bc)
-                    DUP_COMMENT="This issue appears to be a duplicate of #${DUPLICATE_OF}.\n\n"
-                    DUP_COMMENT="${DUP_COMMENT}**Confidence Score:** ${CONFIDENCE_PERCENT}%\n\n"
-                    DUP_COMMENT="${DUP_COMMENT}**Reasoning:** $REASONING\n\n"
-                    DUP_COMMENT="${DUP_COMMENT}Please review the original issue before continuing with this one.\n\n"
-                    DUP_COMMENT="${DUP_COMMENT}---\n*This check was performed during bulk analysis.*"
+                    # Get formatted duplicate comment from CLI tool
+                    cd ai-triage
+                    python -m cli.duplicate_check --title "$ISSUE_TITLE" --description "$ISSUE_BODY" --issues existing_issues_analyzed.json > "duplicate_text_${ISSUE_NUMBER}.txt" 2>&1
+                    cd ..
+                    
+                    # Post the formatted duplicate comment
+                    DUP_COMMENT=$(cat "ai-triage/duplicate_text_${ISSUE_NUMBER}.txt")
+                    DUP_COMMENT="${DUP_COMMENT}\n\n---\n*This check was performed during bulk analysis.*"
                     
                     # Post comment (write to file first to avoid escaping issues)
                     printf "%b" "$DUP_COMMENT" > "duplicate_comment_${ISSUE_NUMBER}.md"
