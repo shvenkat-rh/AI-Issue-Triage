@@ -245,7 +245,7 @@ def format_analysis_text(analysis) -> str:
     type_emoji = type_map.get(analysis.issue_type.value.lower(), "📋")
 
     # Header with title and badges
-    output.append("# 🤖 AI Analysis Report")
+    output.append("# 🤖 Gemini Analysis Report")
     output.append("")
     output.append(f"**Issue:** {analysis.title}")
     output.append("")
@@ -351,9 +351,7 @@ def format_analysis_text(analysis) -> str:
         # Code changes
         output.append("**Code Changes:**")
         output.append("")
-        output.append("```python")
         output.append(solution.code_changes)
-        output.append("```")
         output.append("")
         output.append("</details>")
         output.append("")
@@ -426,6 +424,8 @@ Examples:
     parser.add_argument("--custom-prompt", type=Path, help="Path to custom prompt template file (overrides default prompt)")
 
     parser.add_argument("--api-key", help="Gemini API key (default: from GEMINI_API_KEY env var)")
+
+    parser.add_argument("--model", help="Gemini model name (default: gemini-2.0-flash-001)")
 
     parser.add_argument(
         "--retries", type=int, default=2, help="Maximum number of retry attempts for low quality responses (default: 2)"
@@ -523,6 +523,7 @@ Examples:
             api_key=args.api_key,
             source_path=str(args.source_path) if args.source_path else None,
             custom_prompt_path=str(args.custom_prompt) if args.custom_prompt else None,
+            model_name=args.model,
         )
 
         if not args.quiet:

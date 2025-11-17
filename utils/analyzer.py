@@ -19,7 +19,11 @@ class GeminiIssueAnalyzer:
     """Analyzer that uses Google's Gemini AI to analyze code issues."""
 
     def __init__(
-        self, api_key: Optional[str] = None, source_path: Optional[str] = None, custom_prompt_path: Optional[str] = None
+        self,
+        api_key: Optional[str] = None,
+        source_path: Optional[str] = None,
+        custom_prompt_path: Optional[str] = None,
+        model_name: Optional[str] = None,
     ):
         """Initialize the Gemini analyzer.
 
@@ -27,6 +31,7 @@ class GeminiIssueAnalyzer:
             api_key: Gemini API key. If not provided, will use GEMINI_API_KEY env var.
             source_path: Path to source of truth file. If not provided, defaults to repomix-output.txt.
             custom_prompt_path: Path to custom prompt template file. If not provided, uses default prompt.
+            model_name: Gemini model name. If not provided, defaults to gemini-2.0-flash-001.
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
@@ -34,7 +39,7 @@ class GeminiIssueAnalyzer:
 
         # Initialize the new Gen AI client
         self.client = genai.Client(api_key=self.api_key)
-        self.model_name = "gemini-2.0-flash-001"
+        self.model_name = model_name or "gemini-2.0-flash-001"
 
         # Store source path for codebase loading
         self.source_path = source_path or "repomix-output.txt"
