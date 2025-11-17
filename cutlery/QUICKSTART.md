@@ -8,12 +8,12 @@ This `cutlery/` directory contains everything you need to get started:
 
 ```
 cutlery/
-├── QUICKSTART.md                              # This guide
-├── workflows/                                 # GitHub Actions workflows
+├── QUICKSTART.md                             # This guide
+├── workflows/                                # GitHub Actions workflows
 │   ├── gemini-issue-analysis.yml             # Auto: Single issue analysis
 |   ├── ai-bulk-issue-analysis.yml            # Auto: Bulk issue analysis
-│   ├── **gemini-labeled-issue-analysis.yml**     # (Recommended) Label: Single issue analysis  
-│   └── **ai-bulk-labeled-issue-analysis.yml**    # (Recommended) Label: Bulk issue analysis
+│   ├── gemini-labeled-issue-analysis.yml     # (Recommended) Label: Single issue analysis  
+│   └── ai-bulk-labeled-issue-analysis.yml    # (Recommended) Label: Bulk issue analysis
 ├── triage.config.json                        # Example configuration file
 └── samples/                                  # Sample files for testing
     ├── sample_issue.txt                      # Example issue for testing
