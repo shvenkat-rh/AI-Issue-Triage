@@ -10,10 +10,10 @@ This `cutlery/` directory contains everything you need to get started:
 cutlery/
 ├── QUICKSTART.md                              # This guide
 ├── workflows/                                 # GitHub Actions workflows
-│   ├── gemini-issue-analysis.yml             # _Auto: Single issue analysis_
-│   ├── gemini-labeled-issue-analysis.yml     # (Recommended) Label: Single issue analysis  
-│   ├── ai-bulk-issue-analysis.yml            # _Auto: Bulk issue analysis_
-│   └── ai-bulk-labeled-issue-analysis.yml    # (Recommended) Label: Bulk issue analysis
+│   ├── gemini-issue-analysis.yml             # Auto: Single issue analysis
+|   ├── ai-bulk-issue-analysis.yml            # Auto: Bulk issue analysis
+│   ├── **gemini-labeled-issue-analysis.yml**     # (Recommended) Label: Single issue analysis  
+│   └── **ai-bulk-labeled-issue-analysis.yml**    # (Recommended) Label: Bulk issue analysis
 ├── triage.config.json                        # Example configuration file
 └── samples/                                  # Sample files for testing
     ├── sample_issue.txt                      # Example issue for testing
@@ -54,7 +54,7 @@ This system provides **four automated workflows** in two categories:
    - Re-analyzes all open issues with updated codebase context
    - Posts new analysis comments with fresh insights
 
-### Label-Based Workflows (Selective Analysis) 🎯 NEW!
+### Label-Based Workflows (Selective Analysis) 🎯 NEW! Recommended
 
 3. **Labeled Issue Analysis** (`gemini-labeled-issue-analysis.yml`)
    - Triggers when an issue is **labeled** and opened with "Gemini Analyze" label
@@ -162,8 +162,8 @@ Copy all four workflows and use labels to control which issues get analyzed:
 ```bash
 .github/workflows/
 ├── gemini-issue-analysis.yml              # Auto: Single issue
-├── gemini-labeled-issue-analysis.yml      # (Recommended) Label: Single issue  
 ├── ai-bulk-issue-analysis.yml             # Auto: Bulk issues
+├── gemini-labeled-issue-analysis.yml      # (Recommended) Label: Single issue  
 └── ai-bulk-labeled-issue-analysis.yml     # (Recommended) Label: Bulk issues
 ```
 
