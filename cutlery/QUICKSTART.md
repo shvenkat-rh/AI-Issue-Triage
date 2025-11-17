@@ -162,9 +162,9 @@ Copy all four workflows and use labels to control which issues get analyzed:
 ```bash
 .github/workflows/
 ├── gemini-issue-analysis.yml              # Auto: Single issue
-├── gemini-labeled-issue-analysis.yml      # Label: Single issue  
+├── gemini-labeled-issue-analysis.yml      # (Recommended) Label: Single issue  
 ├── ai-bulk-issue-analysis.yml             # Auto: Bulk issues
-└── ai-bulk-labeled-issue-analysis.yml     # Label: Bulk issues
+└── ai-bulk-labeled-issue-analysis.yml     # (Recommended) Label: Bulk issues
 ```
 
 **Best for**: Maximum flexibility, gradual rollout, testing
@@ -213,9 +213,11 @@ Create your own `triage.config.json`:
 5. **Value**: Paste your Gemini API key
 6. Click **"Add secret"**
 
-### Step 4: (Optional) Create "Gemini Analyze" Label
+### Step 4: Create "Gemini Analyze" Labels
 
 **Only needed if using label-based workflows**
+
+#### Required Label: Gemini Analyze
 
 1. Go to your repository on GitHub
 2. Navigate to **Issues** → **Labels**
@@ -225,7 +227,19 @@ Create your own `triage.config.json`:
 6. **Color**: Choose any color (suggestion: `#0E8A16` for green)
 7. Click **"Create label"**
 
-> **Note**: You can use a different label name by editing the workflow files and changing `'Gemini Analyze'` to your preferred label name.
+#### Optional Label: Bypass Security Checks
+
+If you need to bypass prompt injection security checks for trusted issues:
+
+1. Click **"New label"**
+2. **Name**: `Gemini Analyze : Bypass Prompt Injection Check`
+3. **Description**: `Bypass prompt injection security checks for this issue`
+4. **Color**: Choose any color (suggestion: `#FFA500` for orange - caution)
+5. Click **"Create label"**
+
+> **⚠️ Security Warning**: Only use the bypass label for trusted issues. It disables security checks that protect against prompt injection attacks.
+
+> **Note**: You can use different label names by editing the workflow files and changing the label references.
 
 ### Step 5: Commit and Push
 
@@ -266,7 +280,8 @@ Within a few minutes, you should see:
   - Professional formatting with emojis
   - Collapsible sections for detailed information
   - Syntax-highlighted code blocks
-- ✅ Labels automatically added (`gemini-analyzed`, `type:*`, `severity:*`)
+- ✅ Labels automatically added with colors (e.g., `Type : Bug`, `Severity : Medium`)
+- ✅ All labels include AI-generated descriptions
 
 ---
 
@@ -514,13 +529,14 @@ This is useful for:
    - Professional Markdown formatting
 6. Adds relevant labels
 
-**Labels Added**:
-- `gemini-analyzed` - Issue has been analyzed
-- `type:bug` / `type:enhancement` / `type:feature_request`
-- `severity:low` / `severity:medium` / `severity:high` / `severity:critical`
-- `duplicate` - If duplicate found
-- `security-alert` - If prompt injection detected
-- `prompt-injection-blocked` / `prompt-injection-warning`
+**Labels Added** (all with colors and AI-generated descriptions):
+- `Type : Bug` / `Type : Enhancement` / `Type : Feature request` / `Type : Documentation` / `Type : Question` / `Type : Task`
+- `Severity : Critical` / `Severity : High` / `Severity : Medium` / `Severity : Low`
+- `Duplicate` - If duplicate found (with detailed report)
+- `Prompt injection blocked` - High/critical risk prompt injection detected
+- `Prompt injection warning` - Low/medium risk prompt injection detected
+
+**Note**: All labels are automatically created with appropriate colors and descriptions indicating they are AI-generated.
 
 ### Bulk Issue Analysis
 
@@ -535,35 +551,46 @@ This is useful for:
 **What Both Do**:
 1. Fetches relevant open issues (sorted oldest → newest)
 2. For each issue (in order):
-   - **Step 1: Prompt Injection Check**
+   - **Step 1: Prompt Injection Check** (unless bypassed with special label)
      - Scans for malicious patterns
      - Posts security report comment
-     - Adds `security-alert`, `prompt-injection-blocked` or `prompt-injection-warning` labels
+     - Adds `Prompt injection blocked` or `Prompt injection warning` labels with colors
      - Skips analysis for high/critical risk issues
    - **Step 2: Duplicate Detection** (if security check passes)
-     - Compares against previously analyzed issues in this run
-     - If duplicate: adds `duplicate` label, posts duplicate comment with confidence score, skips AI analysis
+     - Compares against **previously analyzed older issues** only
+     - If duplicate: adds `Duplicate` label, posts detailed duplicate report, skips AI analysis
+     - Report includes similarity score, confidence level, and reasoning
    - **Step 3: AI Analysis** (if not duplicate)
      - Runs full analysis against updated codebase
      - Posts beautifully formatted analysis with fresh insights
-     - Adds labels: `gemini-analyzed`, `type:*`, `severity:*`
+     - Adds labels: `Type : [Bug/Enhancement/etc]`, `Severity : [Low/Medium/High/Critical]`
 
 **Smart Duplicate Detection**:
 - Issues are processed **oldest first**
-- Each issue is compared against all previously analyzed issues in this run
+- Each issue is compared **only against older issues** (by creation date)
 - Older issues become "canonical" - newer duplicates reference them
 - Duplicates are marked and skipped to save API calls
-- Example: If Issue #50 and Issue #100 are duplicates, #100 will reference #50
+- Beautiful formatted reports include:
+  - 🔍 Duplicate Detection Report with status badges
+  - 📊 Similarity and confidence scores with percentages
+  - 🎯 Detailed match information with issue links
+  - 💡 Actionable recommendations
+- Example: If Issue #50 (created first) and Issue #100 (created later) are duplicates, #100 will reference #50 as the original
 
 **Comments Posted**:
 Every issue receives at least one comment with beautiful formatting:
-- **Prompt Injection Report** - Posted for all issues (safe or risky)
-- **Duplicate Detection Comment** - Posted if duplicate found (with confidence score and reasoning)
+- **Prompt Injection Report** - Posted for all issues unless bypassed (safe or risky with risk levels)
+- **Duplicate Detection Report** - Posted if duplicate found with:
+  - Professional markdown formatting
+  - Status badges (🔄 DUPLICATE DETECTED or ✅ NO DUPLICATE FOUND)
+  - Similarity and confidence percentages
+  - Detailed match information in tables
+  - Collapsible sections for metrics and analysis details
 - **AI Analysis** - Posted only for non-duplicate, safe issues with:
   - 🤖 Professional header with emojis
   - 📝 Executive summary
   - 🔍 Root cause analysis with collapsible details
-  - 💡 Proposed solutions with code blocks
+  - 💡 Proposed solutions with properly formatted code blocks
   - Full analysis with fresh codebase context
 
 **Use Cases**:
@@ -571,6 +598,56 @@ Every issue receives at least one comment with beautiful formatting:
 - When issue context changes
 - Periodic re-analysis of open issues
 - Cleaning up duplicate issues automatically
+
+---
+
+## Label Reference
+
+All labels are automatically created with colors and descriptions. Here's a complete reference:
+
+### Type Labels (Sentence Case Format)
+
+| Label | Color | Description |
+|-------|-------|-------------|
+| `Type : Bug` | 🔴 Red (`d73a4a`) | AI-generated: Issue type identified as bug |
+| `Type : Enhancement` | 🔵 Light Blue (`a2eeef`) | AI-generated: Issue type identified as enhancement |
+| `Type : Feature request` | 🟢 Green (`0e8a16`) | AI-generated: Issue type identified as feature request |
+| `Type : Documentation` | 🔵 Blue (`0075ca`) | AI-generated: Issue type identified as documentation |
+| `Type : Question` | 🟣 Purple (`d876e3`) | AI-generated: Issue type identified as question |
+| `Type : Task` | 🟡 Yellow (`fbca04`) | AI-generated: Issue type identified as task |
+
+### Severity Labels (Sentence Case Format)
+
+| Label | Color | Description |
+|-------|-------|-------------|
+| `Severity : Critical` | 🔴 Dark Red (`b60205`) | AI-generated: Severity level assessed as critical |
+| `Severity : High` | 🟠 Orange (`d93f0b`) | AI-generated: Severity level assessed as high |
+| `Severity : Medium` | 🟡 Yellow (`fbca04`) | AI-generated: Severity level assessed as medium |
+| `Severity : Low` | 🟢 Green (`0e8a16`) | AI-generated: Severity level assessed as low |
+
+### Status Labels
+
+| Label | Color | Description |
+|-------|-------|-------------|
+| `Duplicate` | ⚪ Gray (`cfd3d7`) | AI-generated: This issue appears to be a duplicate of another issue |
+| `Prompt injection blocked` | 🔴 Red (`d73a4a`) | AI-generated: Issue flagged for potential prompt injection - high risk |
+| `Prompt injection warning` | 🟡 Yellow (`fbca04`) | AI-generated: Issue may contain prompt injection patterns - low risk |
+
+### Trigger Labels (No Colors or Descriptions)
+
+These labels are manually created by you and do not have automatic colors/descriptions:
+
+| Label | Purpose |
+|-------|---------|
+| `Gemini Analyze` | Triggers AI analysis for label-based workflows |
+| `Gemini Analyze : Bypass Prompt Injection Check` | Bypasses prompt injection security checks (use with caution) |
+
+### Label Format Notes
+
+- **Format**: Labels use title case with spaces (e.g., `Type : Bug`, `Severity : Medium`)
+- **Creation**: All labels (except trigger labels) are automatically created with appropriate colors
+- **Descriptions**: Every auto-created label includes an "AI-generated" description
+- **Updates**: Labels are automatically updated if they already exist with different colors/descriptions
 
 ---
 
@@ -642,10 +719,15 @@ To use a fork or different branch, modify the workflow:
 **Cause**: Legitimate content triggering security checks
 
 **Solutions**:
-1. Review the detected patterns in workflow logs
-2. Contact repository maintainers to adjust sensitivity
+1. Use the `Gemini Analyze : Bypass Prompt Injection Check` label for trusted issues
+2. Review the detected patterns in workflow logs
 3. The security system errs on the side of caution
-4. Low/Medium risks still get analyzed
+4. Low/Medium risks still get analyzed with warnings
+
+**Using the Bypass Label**:
+- Create the label: `Gemini Analyze : Bypass Prompt Injection Check`
+- Add it to trusted issues to skip security checks entirely
+- ⚠️ **Security Warning**: Only use for issues from trusted sources
 
 ### Viewing Workflow Logs
 
@@ -659,8 +741,10 @@ To use a fork or different branch, modify the workflow:
 Both workflows upload artifacts containing:
 - `analysis_result.json` - Structured analysis data
 - `analysis_result.txt` - Human-readable analysis
-- `prompt_injection_result.json` - Security check results
+- `prompt_injection_result.json` - Security check results (if not bypassed)
+- `prompt_injection_debug.log` - Security check debug logs
 - `duplicate_result.json` - Duplicate detection results
+- `duplicate_result.txt` - Formatted duplicate report
 - `triage.config.json` - Configuration used
 - `repomix-output.txt` - Codebase analysis
 
@@ -712,6 +796,11 @@ The system includes built-in protection against prompt injection attacks:
 - **High/Critical**: Issue analysis is blocked
 - **Low/Medium**: Analysis proceeds with warnings
 - **Safe**: Normal processing
+- **Bypass Option**: Use `Gemini Analyze : Bypass Prompt Injection Check` label to skip checks for trusted issues
+
+**Labels Added**:
+- `Prompt injection blocked` (red) - High/critical risk detected
+- `Prompt injection warning` (yellow) - Low/medium risk detected
 
 ### Recommendations
 
