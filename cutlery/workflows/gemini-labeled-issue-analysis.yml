@@ -207,22 +207,43 @@ jobs:
               body: comment
             });
             
-            // Add appropriate security labels
-            const labels = ['security-alert'];
-            if (isHighRisk) {
-              labels.push('prompt-injection-blocked');
-            } else {
-              labels.push('prompt-injection-warning');
+            // Add appropriate security labels with colors and descriptions
+            const labelName = isHighRisk ? 'Prompt injection blocked' : 'Prompt injection warning';
+            const labelColor = isHighRisk ? 'd73a4a' : 'fbca04';
+            const labelDescription = isHighRisk 
+              ? 'AI-generated: Issue flagged for potential prompt injection - high risk'
+              : 'AI-generated: Issue may contain prompt injection patterns - low risk';
+            
+            // Create or update label
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+                color: labelColor,
+                description: labelDescription
+              });
+            } catch (error) {
+              if (error.status === 422) {
+                // Label already exists, update it
+                await github.rest.issues.updateLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: labelName,
+                  color: labelColor,
+                  description: labelDescription
+                });
+              }
             }
             
             await github.rest.issues.addLabels({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              labels: labels
+              labels: [labelName]
             });
             
-            console.log(`Prompt injection ${isHighRisk ? 'blocking' : 'warning'} posted with security labels`);
+            console.log(`Prompt injection ${isHighRisk ? 'blocking' : 'warning'} posted with label`);
 
       # Only end workflow for HIGH and CRITICAL risk injections
       - name: End workflow for high-risk prompt injection
@@ -259,19 +280,36 @@ jobs:
           script: |
             const fs = require('fs');
             
-            // Get all open issues (excluding the current one)
+            // Get the current issue's creation date
+            const { data: currentIssue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const currentIssueCreatedAt = new Date(currentIssue.created_at);
+            console.log(`Current issue #${context.issue.number} created at: ${currentIssueCreatedAt.toISOString()}`);
+            
+            // Get all open issues
             const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              per_page: 100
+              per_page: 100,
+              sort: 'created',
+              direction: 'asc'  // Oldest first
             });
             
-            // Filter out pull requests and the current issue
-            const actualIssues = issues.filter(issue => 
-              !issue.pull_request && 
-              issue.number !== context.issue.number
-            );
+            // Filter: only issues created BEFORE the current issue (older issues only)
+            const actualIssues = issues.filter(issue => {
+              if (issue.pull_request) return false;
+              if (issue.number === context.issue.number) return false;
+              
+              const issueCreatedAt = new Date(issue.created_at);
+              return issueCreatedAt < currentIssueCreatedAt;
+            });
+            
+            console.log(`Fetched ${actualIssues.length} older issues for duplicate checking (created before ${currentIssueCreatedAt.toISOString()})`);
             
             // Create issues data file for duplicate_cli
             const issuesData = actualIssues.map(issue => ({
@@ -282,7 +320,7 @@ jobs:
             }));
             
             fs.writeFileSync('existing_issues.json', JSON.stringify(issuesData, null, 2));
-            console.log(`Fetched ${actualIssues.length} existing issues for duplicate checking`);
+            console.log(`Saved ${issuesData.length} issues to existing_issues.json`);
 
       - name: Check for duplicate issues
         id: duplicate-check
@@ -521,9 +559,12 @@ jobs:
             
             console.log(`Current labels: ${currentLabels.join(', ')}`);
             
-            // Remove old type:* and severity:* labels to avoid conflicts
+            // Remove old type:* and severity:* labels and old type labels to avoid conflicts
             const labelsToRemove = currentLabels.filter(label => 
-              label.startsWith('type:') || label.startsWith('severity:')
+              label.startsWith('type:') || label.startsWith('severity:') ||
+              label.startsWith('Type : ') || label.startsWith('Severity : ') ||
+              ['Bug', 'Enhancement', 'Feature request', 'Documentation', 'Question', 'Task',
+               'Critical', 'High', 'Medium', 'Low'].includes(label)
             );
             
             if (labelsToRemove.length > 0) {
@@ -546,21 +587,99 @@ jobs:
             const labels = [];
             
             if (isDuplicate) {
-              // Add duplicate-specific labels
-              labels.push('gemini-analyzed');
-              labels.push('duplicate');
-            } else {
-              // Add analysis label
-              labels.push('gemini-analyzed');
-              
-              // Add type label if available
-              if (issueType && issueType !== 'null' && issueType !== '') {
-                labels.push(`type:${issueType.toLowerCase()}`);
+              // Create or update duplicate label with color and description
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'Duplicate',
+                  color: 'cfd3d7',
+                  description: 'AI-generated: This issue appears to be a duplicate of another issue'
+                });
+              } catch (error) {
+                if (error.status === 422) {
+                  await github.rest.issues.updateLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: 'Duplicate',
+                    color: 'cfd3d7',
+                    description: 'AI-generated: This issue appears to be a duplicate of another issue'
+                  });
+                }
               }
               
-              // Add severity label if available
+              labels.push('Duplicate');
+            } else {
+              // Create type label with color and description
+              if (issueType && issueType !== 'null' && issueType !== '') {
+                const typeValue = issueType.charAt(0).toUpperCase() + issueType.slice(1).toLowerCase();
+                const typeLabel = `Type : ${typeValue}`;
+                const typeColors = {
+                  'Bug': 'd73a4a',
+                  'Enhancement': 'a2eeef',
+                  'Feature request': '0e8a16',
+                  'Documentation': '0075ca',
+                  'Question': 'd876e3',
+                  'Task': 'fbca04'
+                };
+                const typeColor = typeColors[typeValue] || 'ededed';
+                
+                try {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: typeLabel,
+                    color: typeColor,
+                    description: `AI-generated: Issue type identified as ${typeValue.toLowerCase()}`
+                  });
+                } catch (error) {
+                  if (error.status === 422) {
+                    await github.rest.issues.updateLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: typeLabel,
+                      color: typeColor,
+                      description: `AI-generated: Issue type identified as ${typeValue.toLowerCase()}`
+                    });
+                  }
+                }
+                
+                labels.push(typeLabel);
+              }
+              
+              // Create severity label with color and description
               if (severity && severity !== 'null' && severity !== '') {
-                labels.push(`severity:${severity.toLowerCase()}`);
+                const severityValue = severity.charAt(0).toUpperCase() + severity.slice(1).toLowerCase();
+                const severityLabel = `Severity : ${severityValue}`;
+                const severityColors = {
+                  'Critical': 'b60205',
+                  'High': 'd93f0b',
+                  'Medium': 'fbca04',
+                  'Low': '0e8a16'
+                };
+                const severityColor = severityColors[severityValue] || 'ededed';
+                
+                try {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: severityLabel,
+                    color: severityColor,
+                    description: `AI-generated: Severity level assessed as ${severityValue.toLowerCase()}`
+                  });
+                } catch (error) {
+                  if (error.status === 422) {
+                    await github.rest.issues.updateLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: severityLabel,
+                      color: severityColor,
+                      description: `AI-generated: Severity level assessed as ${severityValue.toLowerCase()}`
+                    });
+                  }
+                }
+                
+                labels.push(severityLabel);
               }
             }
             

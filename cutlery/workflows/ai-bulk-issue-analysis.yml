@@ -257,13 +257,15 @@ jobs:
               elif [ "$RISK_LEVEL" = "critical" ] || [ "$RISK_LEVEL" = "high" ]; then
                 INJECTION_COMMENT="${INJECTION_COMMENT}**⚠️ SECURITY ALERT**\n\nThis issue contains content that appears to be a prompt injection attempt. For security reasons, this issue will not be processed by the AI analysis system.\n\n"
                 
-                # Add security labels
-                gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-blocked" || echo "Failed to add labels"
+                # Add security labels with color and description
+                gh label create "Prompt injection blocked" --description "AI-generated: Issue flagged for potential prompt injection - high risk" --color "d73a4a" --force || true
+                gh issue edit "$ISSUE_NUMBER" --add-label "Prompt injection blocked" || echo "Failed to add labels"
               else
                 INJECTION_COMMENT="${INJECTION_COMMENT}This issue contains content that may contain prompt injection patterns, but the risk level is manageable. Processing will continue with caution.\n\n"
                 
-                # Add warning label
-                gh issue edit "$ISSUE_NUMBER" --add-label "security-alert,prompt-injection-warning" || echo "Failed to add labels"
+                # Add warning label with color and description
+                gh label create "Prompt injection warning" --description "AI-generated: Issue may contain prompt injection patterns - low risk" --color "fbca04" --force || true
+                gh issue edit "$ISSUE_NUMBER" --add-label "Prompt injection warning" || echo "Failed to add labels"
               fi
               
               INJECTION_COMMENT="${INJECTION_COMMENT}---\n*This security check is performed automatically to protect the AI analysis system.*"
@@ -305,9 +307,10 @@ jobs:
                     
                     echo "Issue #$ISSUE_NUMBER is a DUPLICATE of issue #$DUPLICATE_OF"
                     
-                    # Add duplicate label
+                    # Add duplicate label with color and description
                     cd ..
-                    gh issue edit "$ISSUE_NUMBER" --add-label "duplicate" || echo "Failed to add duplicate label"
+                    gh label create "Duplicate" --description "AI-generated: This issue appears to be a duplicate of another issue" --color "cfd3d7" --force || true
+                    gh issue edit "$ISSUE_NUMBER" --add-label "Duplicate" || echo "Failed to add duplicate label"
                     
                     # Get formatted duplicate comment from CLI tool
                     cd ai-triage
@@ -400,27 +403,67 @@ jobs:
               CURRENT_LABELS=$(gh issue view "$ISSUE_NUMBER" --json labels --jq '.labels[].name' | tr '\n' ',' | sed 's/,$//')
               echo "Current labels: $CURRENT_LABELS"
               
-              # Remove old type:* and severity:* labels
+              # Remove old type:* and severity:* labels and old type labels
               if [ -n "$CURRENT_LABELS" ]; then
                 for label in $(echo "$CURRENT_LABELS" | tr ',' '\n'); do
-                  if [[ "$label" == type:* ]] || [[ "$label" == severity:* ]]; then
+                  if [[ "$label" == type:* ]] || [[ "$label" == severity:* ]] || \
+                     [[ "$label" == "Type : "* ]] || [[ "$label" == "Severity : "* ]] || \
+                     [[ "$label" == "Bug" ]] || [[ "$label" == "Enhancement" ]] || \
+                     [[ "$label" == "Feature request" ]] || [[ "$label" == "Documentation" ]] || \
+                     [[ "$label" == "Question" ]] || [[ "$label" == "Task" ]] || \
+                     [[ "$label" == "Critical" ]] || [[ "$label" == "High" ]] || \
+                     [[ "$label" == "Medium" ]] || [[ "$label" == "Low" ]]; then
                     echo "Removing old label: $label"
                     gh issue edit "$ISSUE_NUMBER" --remove-label "$label" || echo "Failed to remove label: $label"
                   fi
                 done
               fi
               
-              # Add new labels
-              LABELS_TO_ADD="gemini-analyzed"
+              # Add new labels with colors and descriptions
+              LABELS_TO_ADD=""
+              
+              # Create and add type label
               if [ -n "$ISSUE_TYPE" ] && [ "$ISSUE_TYPE" != "null" ]; then
-                LABELS_TO_ADD="${LABELS_TO_ADD},type:${ISSUE_TYPE}"
-              fi
-              if [ -n "$SEVERITY" ] && [ "$SEVERITY" != "null" ]; then
-                LABELS_TO_ADD="${LABELS_TO_ADD},severity:${SEVERITY}"
+                TYPE_VALUE="$(echo "$ISSUE_TYPE" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
+                TYPE_LABEL="Type : $TYPE_VALUE"
+                case "$TYPE_VALUE" in
+                  Bug) TYPE_COLOR="d73a4a" ;;
+                  Enhancement) TYPE_COLOR="a2eeef" ;;
+                  "Feature request") TYPE_COLOR="0e8a16" ;;
+                  Documentation) TYPE_COLOR="0075ca" ;;
+                  Question) TYPE_COLOR="d876e3" ;;
+                  Task) TYPE_COLOR="fbca04" ;;
+                  *) TYPE_COLOR="ededed" ;;
+                esac
+                gh label create "$TYPE_LABEL" --description "AI-generated: Issue type identified as ${ISSUE_TYPE,,}" --color "$TYPE_COLOR" --force || true
+                LABELS_TO_ADD="$TYPE_LABEL"
               fi
               
-              echo "Adding new labels: $LABELS_TO_ADD"
-              gh issue edit "$ISSUE_NUMBER" --add-label "$LABELS_TO_ADD" || echo "Failed to update labels"
+              # Create and add severity label
+              if [ -n "$SEVERITY" ] && [ "$SEVERITY" != "null" ]; then
+                SEVERITY_VALUE="$(echo "$SEVERITY" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
+                SEVERITY_LABEL="Severity : $SEVERITY_VALUE"
+                case "$SEVERITY_VALUE" in
+                  Critical) SEVERITY_COLOR="b60205" ;;
+                  High) SEVERITY_COLOR="d93f0b" ;;
+                  Medium) SEVERITY_COLOR="fbca04" ;;
+                  Low) SEVERITY_COLOR="0e8a16" ;;
+                  *) SEVERITY_COLOR="ededed" ;;
+                esac
+                gh label create "$SEVERITY_LABEL" --description "AI-generated: Severity level assessed as ${SEVERITY,,}" --color "$SEVERITY_COLOR" --force || true
+                if [ -n "$LABELS_TO_ADD" ]; then
+                  LABELS_TO_ADD="${LABELS_TO_ADD},$SEVERITY_LABEL"
+                else
+                  LABELS_TO_ADD="$SEVERITY_LABEL"
+                fi
+              fi
+              
+              if [ -n "$LABELS_TO_ADD" ]; then
+                echo "Adding new labels: $LABELS_TO_ADD"
+                gh issue edit "$ISSUE_NUMBER" --add-label "$LABELS_TO_ADD" || echo "Failed to update labels"
+              else
+                echo "No additional labels to add"
+              fi
             fi
             
             echo "Issue #$ISSUE_NUMBER processed successfully"
