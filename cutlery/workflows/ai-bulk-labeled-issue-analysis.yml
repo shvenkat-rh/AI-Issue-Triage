@@ -361,27 +361,32 @@ jobs:
             
             cd ai-triage
             
-            # Build CLI arguments
-            CLI_ARGS="--title \"$ISSUE_TITLE\" --description \"$ISSUE_BODY\" --source-path \"$(basename $REPOMIX_OUTPUT)\""
-            
-            if [ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ] && [ -f "../$CUSTOM_PROMPT_PATH" ]; then
-              CLI_ARGS="$CLI_ARGS --custom-prompt \"../$CUSTOM_PROMPT_PATH\""
-            fi
-            
-            if [ -n "$GEMINI_MODEL" ] && [ "$GEMINI_MODEL" != "null" ]; then
-              CLI_ARGS="$CLI_ARGS --model \"$GEMINI_MODEL\""
-            fi
-            
-            # Run analysis (JSON format)
+            # Run analysis (JSON format) - pass title and description directly
             echo "Running analysis..."
-            eval "python -m cli.analyze $CLI_ARGS --format json --output analysis_result_${ISSUE_NUMBER}.json --quiet" || {
+            python -m cli.analyze \
+              --title "$ISSUE_TITLE" \
+              --description "$ISSUE_BODY" \
+              --source-path "$(basename $REPOMIX_OUTPUT)" \
+              $([ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ] && [ -f "../$CUSTOM_PROMPT_PATH" ] && echo "--custom-prompt ../$CUSTOM_PROMPT_PATH" || true) \
+              $([ -n "$GEMINI_MODEL" ] && [ "$GEMINI_MODEL" != "null" ] && echo "--model $GEMINI_MODEL" || true) \
+              --format json \
+              --output "analysis_result_${ISSUE_NUMBER}.json" \
+              --quiet || {
               echo "ERROR: Analysis failed for issue #$ISSUE_NUMBER"
               cd ..
               continue
             }
             
             # Run analysis (text format)
-            eval "python -m cli.analyze $CLI_ARGS --format text --output analysis_result_${ISSUE_NUMBER}.txt --quiet" || {
+            python -m cli.analyze \
+              --title "$ISSUE_TITLE" \
+              --description "$ISSUE_BODY" \
+              --source-path "$(basename $REPOMIX_OUTPUT)" \
+              $([ -n "$CUSTOM_PROMPT_PATH" ] && [ "$CUSTOM_PROMPT_PATH" != "null" ] && [ -f "../$CUSTOM_PROMPT_PATH" ] && echo "--custom-prompt ../$CUSTOM_PROMPT_PATH" || true) \
+              $([ -n "$GEMINI_MODEL" ] && [ "$GEMINI_MODEL" != "null" ] && echo "--model $GEMINI_MODEL" || true) \
+              --format text \
+              --output "analysis_result_${ISSUE_NUMBER}.txt" \
+              --quiet || {
               echo "ERROR: Text analysis failed for issue #$ISSUE_NUMBER"
               cd ..
               continue
