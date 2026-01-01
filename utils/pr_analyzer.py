@@ -83,7 +83,7 @@ class PRAnalyzer:
             "prompts": {
                 "default": {
                     "pr_review": {
-                        "system_role": "You are an expert code reviewer. Review the following pull request and provide constructive feedback.",
+                        "system_role": "You are an expert code reviewer analyzing a pull request. Provide your technical assessment directly without any preamble, acknowledgment, or meta-commentary.",
                         "review_structure": """Please provide a comprehensive code review with the following structure:
 
 1. **Overall Assessment**: Brief summary of the PR
@@ -366,32 +366,48 @@ Changed Files:
 
         # Extract sections from review text
         overall_assessment = self._extract_section(review_text, ["Overall Assessment", "Summary", "Assessment"])
+
+        # Clean meta-commentary from overall assessment
+        if overall_assessment:
+            overall_assessment = self._clean_meta_commentary(overall_assessment)
+
         strengths = self._extract_list_section(review_text, ["Strengths", "What was done well"])
         issues_found = self._extract_list_section(review_text, ["Issues Found", "Issues", "Problems"])
         suggestions = self._extract_list_section(review_text, ["Suggestions", "Recommendations"])
 
         # If we couldn't extract an overall assessment but have review text, use smart extraction
         if not overall_assessment and review_text:
+            # Clean the text first
+            clean_text = self._clean_meta_commentary(review_text)
+
             # Remove common header patterns
-            clean_text = re.sub(r"^#+\s*", "", review_text)  # Remove leading #
+            clean_text = re.sub(r"^#+\s*", "", clean_text)  # Remove leading #
             clean_text = re.sub(r"^\*\*Overall Assessment\*\*:?\s*", "", clean_text, flags=re.IGNORECASE)
 
-            # Take the first meaningful paragraph (not a header, not empty)
-            paragraphs = [p.strip() for p in clean_text.split("\n\n") if p.strip()]
-            for para in paragraphs:
-                # Skip section headers
-                if para.startswith("#") or para.startswith("**"):
-                    continue
-                # Skip list items
-                if para.startswith("-") or para.startswith("*"):
-                    continue
-                # Skip numbered lists
-                if re.match(r"^\d+\.", para):
-                    continue
-                # This looks like actual content - use it
-                if len(para) > 20:  # Meaningful content
-                    overall_assessment = para
-                    break
+            # Look for "In summary" or "Summary" paragraphs - often the real assessment
+            summary_match = re.search(r"(In summary,?.*?(?:\.|$).*?(?:\n\n|$))", clean_text, re.IGNORECASE | re.DOTALL)
+            if summary_match:
+                overall_assessment = summary_match.group(1).strip()
+            else:
+                # Take the first meaningful paragraph (not a header, not empty)
+                paragraphs = [p.strip() for p in clean_text.split("\n\n") if p.strip()]
+                for para in paragraphs:
+                    # Skip section headers
+                    if para.startswith("#") or para.startswith("**"):
+                        continue
+                    # Skip list items
+                    if para.startswith("-") or para.startswith("*"):
+                        continue
+                    # Skip numbered lists
+                    if re.match(r"^\d+\.", para):
+                        continue
+                    # Skip file references
+                    if para.startswith("File:") or para.startswith("**`"):
+                        continue
+                    # This looks like actual content - use it
+                    if len(para) > 50:  # Meaningful content
+                        overall_assessment = para
+                        break
 
             # If still nothing, try to generate from findings
             if not overall_assessment:
@@ -406,8 +422,13 @@ Changed Files:
                 if parts:
                     overall_assessment = f"This PR has {', '.join(parts)} identified in the review."
                 else:
-                    # Last resort: use the full review text (truncated)
-                    overall_assessment = review_text[:300] + ("..." if len(review_text) > 300 else "")
+                    # Last resort: take a meaningful chunk from the review
+                    # Look for content that's not just headers or meta-commentary
+                    for para in clean_text.split("\n\n"):
+                        para = para.strip()
+                        if len(para) > 100 and not para.startswith(("##", "**", "-", "*", "File:", "Line:")):
+                            overall_assessment = para[:400] + ("..." if len(para) > 400 else "")
+                            break
 
         # Create structured review
         return PRReview(
@@ -419,6 +440,36 @@ Changed Files:
             suggestions=suggestions,
             confidence_score=0.85,  # Default confidence
         )
+
+    def _clean_meta_commentary(self, text: str) -> str:
+        """Remove common meta-commentary phrases from text
+
+        Args:
+            text: Text to clean
+
+        Returns:
+            Cleaned text without meta-commentary
+        """
+        if not text:
+            return text
+
+        # Patterns of meta-commentary to remove
+        meta_patterns = [
+            r"^Okay,?\s+I will .*?\.\s*",
+            r"^I will .*?\.\s*",
+            r"^Let me .*?\.\s*",
+            r"^I'll .*?\.\s*",
+            r"^Here is .*?review:?\s*",
+            r"^This is .*?review:?\s*",
+            r"^Review completed\.?\s*See full summary below\.?\s*",
+            r"^I have reviewed.*?\.\s*",
+        ]
+
+        cleaned = text
+        for pattern in meta_patterns:
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+
+        return cleaned.strip()
 
     def _extract_section(self, text: str, section_headers: List[str]) -> Optional[str]:
         """Extract a section from markdown text based on headers
