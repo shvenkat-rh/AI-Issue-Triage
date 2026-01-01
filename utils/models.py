@@ -106,3 +106,33 @@ class InjectionResult:
     detected_patterns: List[str]
     sanitized_text: Optional[str] = None
     details: Optional[str] = None
+
+
+class PRReviewComment(BaseModel):
+    """Model for PR review file-specific comments."""
+
+    file_path: str = Field(description="Path to the file")
+    line_number: Optional[int] = Field(None, description="Line number if applicable")
+    comment: str = Field(description="Review comment for this location")
+
+
+class PRFileChange(BaseModel):
+    """Model for PR file changes."""
+
+    filename: str = Field(description="Name/path of the changed file")
+    status: str = Field(description="Change status (added, modified, removed, renamed)")
+    additions: int = Field(description="Number of lines added")
+    deletions: int = Field(description="Number of lines deleted")
+    patch: Optional[str] = Field(None, description="Git diff patch")
+
+
+class PRReview(BaseModel):
+    """Complete PR review analysis."""
+
+    summary: str = Field(description="Full review summary text")
+    file_comments: List[PRReviewComment] = Field(description="File-specific review comments")
+    overall_assessment: str = Field(description="Overall assessment of the PR")
+    strengths: List[str] = Field(description="Strengths identified in the PR")
+    issues_found: List[str] = Field(description="Issues found in the PR")
+    suggestions: List[str] = Field(description="Suggestions for improvement")
+    confidence_score: float = Field(description="Confidence in the review (0-1)", ge=0, le=1)

@@ -36,6 +36,7 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 - **Security Protection**: Built-in prompt injection detection to protect against malicious inputs
 - **Duplicate Detection**: Automatically identifies and flags duplicate issues
 - **GitHub Actions Integration**: Multiple workflow options including label-based filtering for selective analysis
+- **PR Review & Analysis**: AI-powered pull request review with code quality feedback and suggestions
 
 ## Setup
 
@@ -392,6 +393,83 @@ python -m cli.cosine_check --title "..." --description "..." --issues issues.jso
 
 ---
 
+### 4. Pull Request Review
+
+AI-powered pull request analysis and code review:
+
+**Using as a module**:
+```bash
+# Review a PR from JSON file
+python -m cli.pr_review --pr-file pr_data.json
+
+# Review with custom configuration
+python -m cli.pr_review --pr-file pr.json --config pr_prompt_config.yml
+
+# Review and save to file
+python -m cli.pr_review --pr-file pr.json --output review.json --format markdown
+
+# Review with repo URL for context-specific prompts
+python -m cli.pr_review --pr-file pr.json --repo-url "https://github.com/user/repo"
+
+# Review with inline data
+python -m cli.pr_review --title "Add feature" --body "Description" --files changes.json
+```
+
+**PR JSON file format**:
+```json
+{
+  "title": "PR title",
+  "body": "PR description",
+  "repo_url": "https://github.com/user/repo",
+  "file_changes": [
+    {
+      "filename": "path/to/file.py",
+      "status": "modified",
+      "additions": 10,
+      "deletions": 5,
+      "patch": "@@ -1,5 +1,10 @@\n..."
+    }
+  ]
+}
+```
+
+**Features**:
+- Comprehensive code review with AI
+- File-specific comments with line numbers
+- Identifies strengths, issues, and suggestions
+- Configurable prompts for different repo types (Python, AI/ML, etc.)
+- Workflow analysis for GitHub Actions
+- Markdown and JSON output formats
+
+**Prompt Configuration**:
+
+The PR analyzer uses a YAML configuration file (`pr_prompt_config.yml`) to customize review behavior based on repository type:
+
+```yaml
+# Repository URL patterns
+repo_mappings:
+  python:
+    - 'github.com/.*/.*-python.*'
+  ai_ml:
+    - 'github.com/.*/.*AI.*'
+
+# Custom prompts per repo type
+prompts:
+  python:
+    pr_review:
+      system_role: 'Python expert code reviewer...'
+      review_structure: |
+        Focus on:
+        - PEP 8 compliance
+        - Type hints
+        - Docstrings
+        ...
+```
+
+**Status**: ✅ Stable and ready for use
+
+---
+
 ### 3. Prompt Injection Detection
 
 Security tool to detect malicious prompt injection attempts:
@@ -433,6 +511,7 @@ from utils.analyzer import GeminiIssueAnalyzer
 from utils.duplicate import CosineDuplicateAnalyzer, GeminiDuplicateAnalyzer
 from utils.models import IssueAnalysis, IssueType, Severity
 from utils.security import PromptInjectionDetector
+from utils.pr_analyzer import PRAnalyzer
 
 # Initialize analyzer with default source path
 analyzer = GeminiIssueAnalyzer(api_key="your-api-key")
@@ -476,6 +555,32 @@ result = duplicate_analyzer.detect_duplicate(
 security = PromptInjectionDetector()
 check = security.detect("User input text")
 print(f"Risk: {check.risk_level}")
+
+# Use PR analyzer
+pr_analyzer = PRAnalyzer(
+    api_key="your-api-key",
+    model_name="gemini-2.0-flash-001"  # Optional
+)
+review = pr_analyzer.review_pr(
+    title="Add new feature",
+    body="Description of changes",
+    file_changes=[
+        {
+            "filename": "src/feature.py",
+            "status": "modified",
+            "additions": 10,
+            "deletions": 5,
+            "patch": "@@ -1,5 +1,10 @@\n..."
+        }
+    ],
+    repo_url="https://github.com/user/repo"
+)
+print(f"Overall Assessment: {review.overall_assessment}")
+print(f"Issues Found: {len(review.issues_found)}")
+
+# Format review for display
+formatted_review = pr_analyzer.format_review_summary(review)
+print(formatted_review)
 ```
 
 ## Source of Truth Configuration
@@ -823,6 +928,7 @@ AI-Issue-Triage/
 │   ├── __init__.py            # Package exports
 │   ├── models.py              # Pydantic data models
 │   ├── analyzer.py            # Main issue analyzer
+│   ├── pr_analyzer.py         # ✅ PR review analyzer
 │   ├── duplicate/             # Duplicate detection module
 │   │   ├── __init__.py
 │   │   ├── gemini_duplicate.py    # ✅ AI-powered duplicate detection
@@ -835,7 +941,8 @@ AI-Issue-Triage/
 │   ├── __init__.py
 │   ├── analyze.py             # ✅ Main CLI (ai-triage)
 │   ├── duplicate_check.py     # ✅ Duplicate check CLI (ai-triage-duplicate)
-│   └── cosine_check.py        # 🚧 Cosine check CLI (ai-triage-cosine, WIP)
+│   ├── cosine_check.py        # 🚧 Cosine check CLI (ai-triage-cosine, WIP)
+│   └── pr_review.py           # ✅ PR review CLI
 │
 ├── ui/                         # 🎨 User Interface
 │   ├── __init__.py
@@ -848,7 +955,8 @@ AI-Issue-Triage/
 │   ├── test_models.py         # Data models tests
 │   ├── test_gemini_analyzer.py        # Analyzer tests
 │   ├── test_duplicate_analyzer.py     # Duplicate detection tests
-│   └── test_cosine_duplicate_analyzer.py  # Cosine similarity tests
+│   ├── test_cosine_duplicate_analyzer.py  # Cosine similarity tests
+│   └── test_pr_analyzer.py    # ✅ PR analyzer tests
 │
 ├── cutlery/                    # 🚀 Quick Start Resources
 │   ├── QUICKSTART.md          # Complete setup guide
@@ -866,6 +974,7 @@ AI-Issue-Triage/
 │   ├── pytest.ini             # Pytest configuration
 │   ├── pyproject.toml         # Black, isort configuration
 │   ├── .flake8                # Flake8 linting configuration
+│   ├── pr_prompt_config.yml   # ✅ PR review prompt configuration
 │   └── env_example.txt        # Environment variables template
 │
 └── Documentation & Samples

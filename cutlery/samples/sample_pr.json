@@ -1,0 +1,43 @@
+{
+  "title": "Add PR analyzer feature",
+  "body": "This PR adds a comprehensive PR analysis feature using Gemini AI.\n\nChanges include:\n- New PRAnalyzer class with Gemini integration\n- Support for configurable prompts based on repo type\n- CLI command for PR review\n- Comprehensive tests\n- Documentation updates",
+  "repo_url": "https://github.com/user/AI-Issue-Triage",
+  "file_changes": [
+    {
+      "filename": "utils/pr_analyzer.py",
+      "status": "added",
+      "additions": 450,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,450 @@\n+#!/usr/bin/env python3\n+\"\"\"\n+PR Reviewer using Gemini API\n+\"\"\"\n+import logging\n+import os\n+import re\n+import yaml\n+from pathlib import Path\n+from typing import List, Dict, Optional\n+\n+from dotenv import load_dotenv\n+from google import genai\n+\n+from utils.models import PRReview, PRReviewComment, PRFileChange"
+    },
+    {
+      "filename": "cli/pr_review.py",
+      "status": "added",
+      "additions": 180,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,180 @@\n+#!/usr/bin/env python3\n+\"\"\"CLI for PR review functionality.\"\"\"\n+\n+import argparse\n+import json\n+import logging"
+    },
+    {
+      "filename": "utils/models.py",
+      "status": "modified",
+      "additions": 30,
+      "deletions": 0,
+      "patch": "@@ -100,6 +100,36 @@\n class InjectionResult:\n     \"\"\"Result of prompt injection detection.\"\"\"\n \n+\n+class PRReviewComment(BaseModel):\n+    \"\"\"Model for PR review file-specific comments.\"\"\"\n+\n+    file_path: str = Field(description=\"Path to the file\")\n+    line_number: Optional[int] = Field(None, description=\"Line number if applicable\")\n+    comment: str = Field(description=\"Review comment for this location\")"
+    },
+    {
+      "filename": "pr_prompt_config.yml",
+      "status": "added",
+      "additions": 163,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,163 @@\n+# Prompt Configuration for GitHub PR Review Bot\n+# Maps repository URLs to specific prompt types\n+\n+# Repository URL patterns mapped to repo types\n+repo_mappings:"
+    },
+    {
+      "filename": "README.md",
+      "status": "modified",
+      "additions": 85,
+      "deletions": 5,
+      "patch": "@@ -35,7 +35,8 @@\n - **Smart Retry Mechanism**: Automatically retries analysis if low-quality responses are detected\n - **Security Protection**: Built-in prompt injection detection to protect against malicious inputs\n - **Duplicate Detection**: Automatically identifies and flags duplicate issues\n-- **GitHub Actions Integration**: Multiple workflow options including label-based filtering for selective analysis\n+- **GitHub Actions Integration**: Multiple workflow options including label-based filtering\n+- **PR Review & Analysis**: AI-powered pull request review with code quality feedback"
+    }
+  ]
+}
+

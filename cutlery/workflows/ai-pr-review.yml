@@ -1,0 +1,210 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [labeled, opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  pr-review:
+    # Only run if PR has "PR_Review" label
+    if: contains(github.event.pull_request.labels.*.name, 'PR_Review')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout AI-Issue-Triage repository
+        uses: actions/checkout@v4
+        with:
+          repository: shvenkat-rh/AI-Issue-Triage
+          ref: main
+          path: ai-triage
+
+      - name: Checkout PR repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          path: pr-repo
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd ai-triage
+          pip install -r requirements.txt
+
+      - name: Set up Node.js (for repomix)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install repomix
+        run: npm install -g repomix
+
+      - name: Generate codebase context with repomix
+        run: |
+          cd pr-repo
+          repomix --output repomix-output.txt
+          echo "✅ Codebase context generated"
+          ls -lh repomix-output.txt
+
+      - name: Fetch PR file changes
+        id: pr-files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Get PR files
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+            
+            console.log(`📁 Found ${files.length} changed files`);
+            
+            // Format file changes for PR analyzer
+            const fileChanges = files.map(file => ({
+              filename: file.filename,
+              status: file.status,
+              additions: file.additions,
+              deletions: file.deletions,
+              patch: file.patch || ''
+            }));
+            
+            // Create PR data JSON
+            const prData = {
+              title: context.payload.pull_request.title,
+              body: context.payload.pull_request.body || '',
+              repo_url: context.payload.pull_request.html_url,
+              file_changes: fileChanges
+            };
+            
+            // Save to file
+            fs.writeFileSync('pr_data.json', JSON.stringify(prData, null, 2));
+            console.log('✅ PR data saved to pr_data.json');
+            
+            return prData;
+
+      - name: Run PR Analysis
+        id: analyze
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          cd ai-triage
+          
+          echo "🤖 Starting AI PR review..."
+          
+          # Copy repomix output to current directory
+          cp ../pr-repo/repomix-output.txt .
+          
+          # Run PR review
+          python -m cli.pr_review \
+            --pr-file ../pr_data.json \
+            --output pr_review.json \
+            --format markdown \
+            --verbose
+          
+          echo "✅ PR review completed"
+          
+          # Check if review was successful
+          if [ -f pr_review.json ]; then
+            echo "review_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "review_success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post PR Review Comment
+        if: steps.analyze.outputs.review_success == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read the review result
+            let reviewText;
+            try {
+              reviewText = fs.readFileSync('ai-triage/pr_review.json', 'utf8');
+              console.log('✅ Review file read successfully');
+            } catch (error) {
+              console.error('❌ Error reading review file:', error);
+              reviewText = '## 🤖 AI Code Review\n\nError: Could not read review results.';
+            }
+            
+            // Post as PR comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: reviewText
+            });
+            
+            console.log('✅ Review posted as PR comment');
+
+      - name: Upload Review Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-review-results
+          path: |
+            ai-triage/pr_review.json
+            pr_data.json
+            pr-repo/repomix-output.txt
+          retention-days: 30
+
+      - name: Review Summary
+        if: always()
+        run: |
+          echo "## 📊 PR Review Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Number**: #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Title**: ${{ github.event.pull_request.title }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Files Changed**: $(cat pr_data.json | jq '.file_changes | length')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Review Status**: ${{ steps.analyze.outputs.review_success }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.analyze.outputs.review_success }}" == "true" ]; then
+            echo "✅ AI review completed and posted to PR" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ AI review failed - check logs for details" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Handle Review Failure
+        if: steps.analyze.outputs.review_success != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const errorComment = `## ⚠️ AI PR Review Failed
+            
+            The automated PR review encountered an error. This could be due to:
+            - API rate limits
+            - Invalid API key configuration
+            - Network connectivity issues
+            - PR complexity (too many files or large diffs)
+            
+            **Action Required**: 
+            - Check the workflow logs for detailed error messages
+            - Verify the GEMINI_API_KEY secret is properly configured
+            - Consider breaking down large PRs into smaller changes
+            
+            You can manually trigger the review by removing and re-adding the "PR_Review" label.
+            
+            ---
+            *Workflow Run*: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: errorComment
+            });
+
