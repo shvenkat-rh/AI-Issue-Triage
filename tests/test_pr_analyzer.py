@@ -2,12 +2,13 @@
 
 import json
 import os
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
-from utils.pr_analyzer import PRAnalyzer
+import pytest
+
 from utils.models import PRReview, PRReviewComment
+from utils.pr_analyzer import PRAnalyzer
 
 
 @pytest.fixture

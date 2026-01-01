@@ -5,14 +5,14 @@ PR Reviewer using Gemini API
 import logging
 import os
 import re
-import yaml
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
+import yaml
 from dotenv import load_dotenv
 from google import genai
 
-from utils.models import PRReview, PRReviewComment, PRFileChange
+from utils.models import PRFileChange, PRReview, PRReviewComment
 
 # Load environment variables
 load_dotenv()
