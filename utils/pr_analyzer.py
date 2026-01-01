@@ -32,12 +32,13 @@ class PRAnalyzer:
             model_name: Gemini model name. If not provided, defaults to gemini-2.0-flash-001.
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.model_name = model_name or "gemini-2.0-flash-001"
+
         if not self.api_key:
             logger.warning("Gemini API key not provided")
             self.client = None
         else:
             self.client = genai.Client(api_key=self.api_key)
-            self.model_name = model_name or "gemini-2.0-flash-001"
 
         # Load prompt configuration
         self.prompt_config = self._load_prompt_config(config_path)

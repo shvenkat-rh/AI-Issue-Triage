@@ -107,7 +107,12 @@ PR JSON file format:
 
     # Configuration options
     parser.add_argument("--config", type=str, help="Path to custom prompt configuration YAML file")
-    parser.add_argument("--model", type=str, help="Gemini model name (default: gemini-2.0-flash-001)")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="gemini-2.0-flash-001",
+        help="Gemini model name (default: gemini-2.0-flash-001)",
+    )
     parser.add_argument("--api-key", type=str, help="Gemini API key (or set GEMINI_API_KEY env var)")
 
     # Output options
