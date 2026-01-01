@@ -493,9 +493,8 @@ Changed Files:
                 match = re.search(pattern, text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
                 if match:
                     extracted = match.group(1).strip()
-                    # Clean up common artifacts
-                    extracted = re.sub(r"^[-*]\s*", "", extracted)  # Remove leading bullet
-                    extracted = re.sub(r"^\[.*?\]\s*", "", extracted)  # Remove [placeholder] style text
+                    # Clean up [placeholder] style text but keep bullets for list parsing
+                    extracted = re.sub(r"^\[.*?\]\s*", "", extracted)
                     if extracted and len(extracted) > 10:  # Ensure meaningful content
                         return extracted
         return None
