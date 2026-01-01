@@ -369,11 +369,32 @@ Changed Files:
         issues_found = self._extract_list_section(review_text, ["Issues Found", "Issues", "Problems"])
         suggestions = self._extract_list_section(review_text, ["Suggestions", "Recommendations"])
 
+        # If we couldn't extract an overall assessment but have review text, use a summary
+        if not overall_assessment and review_text:
+            # Take the first paragraph or first 500 characters as assessment
+            first_para = review_text.split("\n\n")[0].strip()
+            if first_para and not first_para.startswith("#"):
+                overall_assessment = first_para
+            else:
+                # Fallback: create assessment from what we found
+                parts = []
+                if strengths:
+                    parts.append(f"Found {len(strengths)} strength(s)")
+                if issues_found:
+                    parts.append(f"{len(issues_found)} issue(s)")
+                if suggestions:
+                    parts.append(f"{len(suggestions)} suggestion(s)")
+
+                if parts:
+                    overall_assessment = "This PR has " + ", ".join(parts) + "."
+                else:
+                    overall_assessment = "Review completed. See full summary below."
+
         # Create structured review
         return PRReview(
             summary=review_text,
             file_comments=file_comments,
-            overall_assessment=overall_assessment or "No overall assessment provided",
+            overall_assessment=overall_assessment or "Review completed successfully.",
             strengths=strengths,
             issues_found=issues_found,
             suggestions=suggestions,
@@ -439,7 +460,8 @@ Changed Files:
 
         # Add overall assessment
         if review.overall_assessment:
-            formatted += f"### Overall Assessment\n\n{review.overall_assessment}\n\n"
+            formatted += f"### 📋 Overall Assessment\n\n{review.overall_assessment}\n\n"
+            formatted += "---\n\n"
 
         # Add strengths
         if review.strengths:
@@ -471,7 +493,19 @@ Changed Files:
                     formatted += f" (line {comment.line_number})"
                 formatted += f":\n{comment.comment}\n\n"
 
-        formatted += "\n---\n*This review was generated automatically by the Gemini AI Code Review Bot.*"
+        # If no structured content was extracted, show the full summary
+        if not any([review.strengths, review.issues_found, review.suggestions, review.file_comments]):
+            formatted += "### 📝 Full Review\n\n"
+            formatted += "<details>\n<summary><b>View Complete Analysis</b></summary>\n\n"
+            formatted += review.summary
+            formatted += "\n\n</details>\n\n"
+
+        # Add confidence score
+        confidence_percent = int(review.confidence_score * 100)
+        formatted += f"\n📊 **Confidence Score:** {confidence_percent}%\n\n"
+
+        formatted += "---\n"
+        formatted += "<sub>🤖 <i>This review was generated automatically by the Gemini AI Code Review Bot.</i></sub>"
 
         return formatted
 
