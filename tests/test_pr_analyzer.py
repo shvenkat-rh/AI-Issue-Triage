@@ -25,7 +25,7 @@ def sample_pr_data():
                 "patch": """@@ -0,0 +1,50 @@
 +def new_feature():
 +    pass
-"""
+""",
             },
             {
                 "filename": "tests/test_feature.py",
@@ -35,9 +35,9 @@ def sample_pr_data():
                 "patch": """@@ -0,0 +1,30 @@
 +def test_new_feature():
 +    assert True
-"""
-            }
-        ]
+""",
+            },
+        ],
     }
 
 
@@ -86,13 +86,13 @@ def mock_analyzer():
 @pytest.fixture
 def mock_analyzer_with_api():
     """Create a mock PR analyzer with mocked API."""
-    with patch('utils.pr_analyzer.genai.Client') as mock_client:
+    with patch("utils.pr_analyzer.genai.Client") as mock_client:
         mock_instance = MagicMock()
         mock_client.return_value = mock_instance
-        
+
         analyzer = PRAnalyzer(api_key="test_key")
         analyzer.client = mock_instance
-        
+
         yield analyzer
 
 
@@ -106,14 +106,14 @@ class TestPRAnalyzer:
 
     def test_init_with_api_key(self):
         """Test initialization with API key."""
-        with patch('utils.pr_analyzer.genai.Client') as mock_client:
+        with patch("utils.pr_analyzer.genai.Client") as mock_client:
             analyzer = PRAnalyzer(api_key="test_key")
             assert analyzer.client is not None
             assert analyzer.model_name == "gemini-2.0-flash-001"
 
     def test_init_with_custom_model(self):
         """Test initialization with custom model name."""
-        with patch('utils.pr_analyzer.genai.Client'):
+        with patch("utils.pr_analyzer.genai.Client"):
             analyzer = PRAnalyzer(api_key="test_key", model_name="gemini-pro")
             assert analyzer.model_name == "gemini-pro"
 
@@ -134,13 +134,11 @@ class TestPRAnalyzer:
 
     def test_get_repo_type_with_pattern(self):
         """Test repo type detection with pattern match."""
-        with patch('utils.pr_analyzer.genai.Client'):
+        with patch("utils.pr_analyzer.genai.Client"):
             analyzer = PRAnalyzer(api_key="test_key")
             # Add custom mapping
-            analyzer.prompt_config["repo_mappings"] = {
-                "python": [".*python.*", ".*py.*"]
-            }
-            
+            analyzer.prompt_config["repo_mappings"] = {"python": [".*python.*", ".*py.*"]}
+
             repo_type = analyzer._get_repo_type("https://github.com/user/python-project")
             assert repo_type == "python"
 
@@ -158,11 +156,9 @@ class TestPRAnalyzer:
     def test_build_review_prompt(self, mock_analyzer, sample_pr_data):
         """Test review prompt building."""
         prompt = mock_analyzer._build_review_prompt(
-            sample_pr_data["title"],
-            sample_pr_data["body"],
-            sample_pr_data["file_changes"]
+            sample_pr_data["title"], sample_pr_data["body"], sample_pr_data["file_changes"]
         )
-        
+
         assert sample_pr_data["title"] in prompt
         assert sample_pr_data["body"] in prompt
         assert "src/feature.py" in prompt
@@ -171,50 +167,33 @@ class TestPRAnalyzer:
     def test_build_review_prompt_with_large_patch(self, mock_analyzer):
         """Test review prompt with large patch truncation."""
         large_patch = "+" * 10000  # Large patch
-        file_changes = [{
-            "filename": "large_file.py",
-            "status": "modified",
-            "additions": 5000,
-            "deletions": 0,
-            "patch": large_patch
-        }]
-        
-        prompt = mock_analyzer._build_review_prompt(
-            "Test PR",
-            "Test body",
-            file_changes
-        )
-        
+        file_changes = [
+            {"filename": "large_file.py", "status": "modified", "additions": 5000, "deletions": 0, "patch": large_patch}
+        ]
+
+        prompt = mock_analyzer._build_review_prompt("Test PR", "Test body", file_changes)
+
         assert "truncated" in prompt
         assert len(prompt) < len(large_patch)
 
     def test_extract_section(self, mock_analyzer, sample_gemini_response):
         """Test section extraction from review text."""
-        assessment = mock_analyzer._extract_section(
-            sample_gemini_response,
-            ["Overall Assessment"]
-        )
+        assessment = mock_analyzer._extract_section(sample_gemini_response, ["Overall Assessment"])
         assert assessment is not None
         assert "new feature" in assessment
 
     def test_extract_list_section(self, mock_analyzer, sample_gemini_response):
         """Test list section extraction."""
-        strengths = mock_analyzer._extract_list_section(
-            sample_gemini_response,
-            ["Strengths"]
-        )
+        strengths = mock_analyzer._extract_list_section(sample_gemini_response, ["Strengths"])
         assert len(strengths) > 0
         assert any("code structure" in s.lower() for s in strengths)
 
     def test_parse_review(self, mock_analyzer, sample_gemini_response, sample_pr_data):
         """Test review parsing."""
         review = mock_analyzer._parse_review(
-            sample_gemini_response,
-            sample_pr_data["file_changes"],
-            sample_pr_data["title"],
-            sample_pr_data["body"]
+            sample_gemini_response, sample_pr_data["file_changes"], sample_pr_data["title"], sample_pr_data["body"]
         )
-        
+
         assert isinstance(review, PRReview)
         assert review.summary == sample_gemini_response
         assert len(review.strengths) > 0
@@ -225,22 +204,16 @@ class TestPRAnalyzer:
         """Test review formatting."""
         review = PRReview(
             summary="Test review",
-            file_comments=[
-                PRReviewComment(
-                    file_path="test.py",
-                    line_number=10,
-                    comment="Test comment"
-                )
-            ],
+            file_comments=[PRReviewComment(file_path="test.py", line_number=10, comment="Test comment")],
             overall_assessment="Good PR",
             strengths=["Good tests"],
             issues_found=["Missing docs"],
             suggestions=["Add more tests"],
-            confidence_score=0.9
+            confidence_score=0.9,
         )
-        
+
         formatted = mock_analyzer.format_review_summary(review)
-        
+
         assert "Overall Assessment" in formatted
         assert "Good PR" in formatted
         assert "Strengths" in formatted
@@ -251,12 +224,8 @@ class TestPRAnalyzer:
 
     def test_review_pr_without_api_key(self, mock_analyzer, sample_pr_data):
         """Test PR review without API key."""
-        review = mock_analyzer.review_pr(
-            sample_pr_data["title"],
-            sample_pr_data["body"],
-            sample_pr_data["file_changes"]
-        )
-        
+        review = mock_analyzer.review_pr(sample_pr_data["title"], sample_pr_data["body"], sample_pr_data["file_changes"])
+
         assert isinstance(review, PRReview)
         assert "Error" in review.summary
         assert review.confidence_score == 0.0
@@ -267,13 +236,11 @@ class TestPRAnalyzer:
         mock_response = Mock()
         mock_response.text = sample_gemini_response
         mock_analyzer_with_api.client.models.generate_content.return_value = mock_response
-        
+
         review = mock_analyzer_with_api.review_pr(
-            sample_pr_data["title"],
-            sample_pr_data["body"],
-            sample_pr_data["file_changes"]
+            sample_pr_data["title"], sample_pr_data["body"], sample_pr_data["file_changes"]
         )
-        
+
         assert isinstance(review, PRReview)
         assert len(review.strengths) > 0
         assert len(review.issues_found) > 0
@@ -283,26 +250,24 @@ class TestPRAnalyzer:
         mock_response = Mock()
         mock_response.text = sample_gemini_response
         mock_analyzer_with_api.client.models.generate_content.return_value = mock_response
-        
+
         review = mock_analyzer_with_api.review_pr(
             sample_pr_data["title"],
             sample_pr_data["body"],
             sample_pr_data["file_changes"],
-            repo_url="https://github.com/user/python-repo"
+            repo_url="https://github.com/user/python-repo",
         )
-        
+
         assert isinstance(review, PRReview)
 
     def test_review_pr_api_error(self, mock_analyzer_with_api, sample_pr_data):
         """Test PR review with API error."""
         mock_analyzer_with_api.client.models.generate_content.side_effect = Exception("API Error")
-        
+
         review = mock_analyzer_with_api.review_pr(
-            sample_pr_data["title"],
-            sample_pr_data["body"],
-            sample_pr_data["file_changes"]
+            sample_pr_data["title"], sample_pr_data["body"], sample_pr_data["file_changes"]
         )
-        
+
         assert isinstance(review, PRReview)
         assert "Error" in review.summary
         assert review.confidence_score == 0.0
@@ -312,47 +277,34 @@ class TestPRAnalyzer:
         mock_response = Mock()
         mock_response.text = "Workflow analysis result"
         mock_analyzer_with_api.client.models.generate_content.return_value = mock_response
-        
+
         jobs = [
             {
                 "name": "test",
                 "conclusion": "success",
                 "status": "completed",
-                "steps": [
-                    {"name": "Run tests", "conclusion": "success", "status": "completed"}
-                ]
+                "steps": [{"name": "Run tests", "conclusion": "success", "status": "completed"}],
             }
         ]
-        
+
         analysis = mock_analyzer_with_api.analyze_workflow_run(
-            workflow_name="CI",
-            conclusion="success",
-            jobs=jobs,
-            failed_jobs=[]
+            workflow_name="CI", conclusion="success", jobs=jobs, failed_jobs=[]
         )
-        
+
         assert "Workflow analysis result" in analysis
 
     def test_workflow_analysis_without_api(self, mock_analyzer):
         """Test workflow analysis without API key."""
-        analysis = mock_analyzer.analyze_workflow_run(
-            workflow_name="CI",
-            conclusion="success",
-            jobs=[],
-            failed_jobs=[]
-        )
-        
+        analysis = mock_analyzer.analyze_workflow_run(workflow_name="CI", conclusion="success", jobs=[], failed_jobs=[])
+
         assert "successfully" in analysis.lower()
 
     def test_workflow_analysis_failure(self, mock_analyzer):
         """Test workflow analysis for failed workflow."""
         analysis = mock_analyzer.analyze_workflow_run(
-            workflow_name="CI",
-            conclusion="failure",
-            jobs=[],
-            failed_jobs=["test", "lint"]
+            workflow_name="CI", conclusion="failure", jobs=[], failed_jobs=["test", "lint"]
         )
-        
+
         assert "failed" in analysis.lower()
         assert "test" in analysis
         assert "lint" in analysis
@@ -363,18 +315,14 @@ class TestPRAnalyzerIntegration:
 
     @pytest.mark.skipif(
         not os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"),
-        reason="Requires GEMINI_API_KEY or GOOGLE_API_KEY environment variable"
+        reason="Requires GEMINI_API_KEY or GOOGLE_API_KEY environment variable",
     )
     def test_real_api_call(self, sample_pr_data):
         """Test with real API call (only runs if API key is available)."""
         analyzer = PRAnalyzer()
-        
-        review = analyzer.review_pr(
-            sample_pr_data["title"],
-            sample_pr_data["body"],
-            sample_pr_data["file_changes"]
-        )
-        
+
+        review = analyzer.review_pr(sample_pr_data["title"], sample_pr_data["body"], sample_pr_data["file_changes"])
+
         assert isinstance(review, PRReview)
         assert review.summary
         assert review.confidence_score > 0
@@ -382,4 +330,3 @@ class TestPRAnalyzerIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

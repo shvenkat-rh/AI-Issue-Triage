@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 def load_pr_data(pr_file: str) -> dict:
     """Load PR data from a JSON file.
-    
+
     Args:
         pr_file: Path to PR JSON file
-        
+
     Returns:
         Dictionary containing PR data
     """
@@ -38,7 +38,7 @@ def load_pr_data(pr_file: str) -> dict:
 
 def save_review(review_data: dict, output_file: Optional[str] = None) -> None:
     """Save review data to a file or print to stdout.
-    
+
     Args:
         review_data: Review data to save
         output_file: Optional output file path
@@ -153,23 +153,14 @@ PR JSON file format:
 
     # Initialize PR analyzer
     try:
-        analyzer = PRAnalyzer(
-            api_key=args.api_key,
-            config_path=args.config,
-            model_name=args.model
-        )
+        analyzer = PRAnalyzer(api_key=args.api_key, config_path=args.config, model_name=args.model)
     except Exception as e:
         logger.error(f"Error initializing PR analyzer: {e}")
         sys.exit(1)
 
     # Perform review
     try:
-        review = analyzer.review_pr(
-            title=title,
-            body=body,
-            file_changes=file_changes,
-            repo_url=repo_url
-        )
+        review = analyzer.review_pr(title=title, body=body, file_changes=file_changes, repo_url=repo_url)
         logger.info("Review completed successfully")
 
         # Format output
@@ -189,6 +180,7 @@ PR JSON file format:
     except Exception as e:
         logger.error(f"Error during PR review: {e}")
         import traceback
+
         if args.verbose:
             traceback.print_exc()
         sys.exit(1)
@@ -196,4 +188,3 @@ PR JSON file format:
 
 if __name__ == "__main__":
     main()
-

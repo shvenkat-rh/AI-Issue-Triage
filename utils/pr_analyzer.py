@@ -25,7 +25,7 @@ class PRAnalyzer:
 
     def __init__(self, api_key: Optional[str] = None, config_path: Optional[str] = None, model_name: Optional[str] = None):
         """Initialize the PR analyzer with Gemini API key
-        
+
         Args:
             api_key: Gemini API key. If not provided, will use GEMINI_API_KEY or GOOGLE_API_KEY env var.
             config_path: Path to prompt configuration file. If not provided, uses default config.
@@ -45,10 +45,10 @@ class PRAnalyzer:
 
     def _load_prompt_config(self, config_path: Optional[str] = None) -> Dict:
         """Load prompt configuration from YAML file
-        
+
         Args:
             config_path: Path to the configuration file
-            
+
         Returns:
             Configuration dictionary
         """
@@ -63,7 +63,7 @@ class PRAnalyzer:
             return self._get_default_config()
 
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
             logger.info(f"Successfully loaded prompt config from {config_path}")
             return config
@@ -73,7 +73,7 @@ class PRAnalyzer:
 
     def _get_default_config(self) -> Dict:
         """Return default configuration if YAML file is not available
-        
+
         Returns:
             Default configuration dictionary
         """
@@ -106,18 +106,18 @@ Format your response clearly with markdown. Be constructive and professional."""
 4. **Recommendations**: Actionable steps to improve the workflow or fix issues
 5. **Best Practices**: Suggestions for workflow improvements
 
-Be concise, actionable, and helpful. Format your response with clear markdown sections."""
+Be concise, actionable, and helpful. Format your response with clear markdown sections.""",
                     }
                 }
-            }
+            },
         }
 
     def _get_repo_type(self, repo_url: str) -> str:
         """Determine repo type based on URL patterns
-        
+
         Args:
             repo_url: Repository URL
-            
+
         Returns:
             Repository type identifier
         """
@@ -141,11 +141,11 @@ Be concise, actionable, and helpful. Format your response with clear markdown se
 
     def _get_prompt(self, prompt_type: str, repo_type: str = "default") -> Dict:
         """Get prompt configuration for a specific type and repo
-        
+
         Args:
             prompt_type: Type of prompt (e.g., 'pr_review', 'workflow_analysis')
             repo_type: Type of repository
-            
+
         Returns:
             Prompt configuration dictionary
         """
@@ -168,10 +168,10 @@ Be concise, actionable, and helpful. Format your response with clear markdown se
 
     def _get_workflow_analysis_prompt(self, repo_type: str = "default") -> str:
         """Get workflow analysis prompt template for a specific repo type
-        
+
         Args:
             repo_type: Type of repository
-            
+
         Returns:
             Workflow analysis prompt string
         """
@@ -212,13 +212,13 @@ Be concise, actionable, and helpful. Format your response with clear markdown se
                 strengths=[],
                 issues_found=[],
                 suggestions=[],
-                confidence_score=0.0
+                confidence_score=0.0,
             )
 
         try:
             # Determine repo type and get appropriate prompt
             repo_type = self._get_repo_type(repo_url or "")
-            
+
             # Prepare context for review
             review_prompt = self._build_review_prompt(title, body, file_changes, repo_type)
 
@@ -243,26 +243,27 @@ Be concise, actionable, and helpful. Format your response with clear markdown se
                 strengths=[],
                 issues_found=[],
                 suggestions=[],
-                confidence_score=0.0
+                confidence_score=0.0,
             )
 
-    def _build_review_prompt(
-        self, title: str, body: str, file_changes: List[Dict], repo_type: str = "default"
-    ) -> str:
+    def _build_review_prompt(self, title: str, body: str, file_changes: List[Dict], repo_type: str = "default") -> str:
         """Build the prompt for Gemini API using repo-specific configuration
-        
+
         Args:
             title: PR title
             body: PR description
             file_changes: List of file changes
             repo_type: Type of repository
-            
+
         Returns:
             Formatted prompt string
         """
         # Get prompt configuration for this repo type
         prompt_config = self._get_prompt("pr_review", repo_type)
-        system_role = prompt_config.get("system_role", "You are an expert code reviewer. Review the following pull request and provide constructive feedback.")
+        system_role = prompt_config.get(
+            "system_role",
+            "You are an expert code reviewer. Review the following pull request and provide constructive feedback.",
+        )
         review_structure = prompt_config.get("review_structure", "")
 
         # Build the prompt
@@ -299,13 +300,13 @@ Changed Files:
 
     def _parse_review(self, review_text: str, file_changes: List[Dict], title: str, body: str) -> PRReview:
         """Parse the review response into structured format
-        
+
         Args:
             review_text: Raw review text from Gemini
             file_changes: List of file changes
             title: PR title
             body: PR description
-            
+
         Returns:
             Structured PRReview object
         """
@@ -331,7 +332,7 @@ Changed Files:
                                 PRReviewComment(
                                     file_path=current_file,
                                     line_number=current_line,
-                                    comment="\n".join(current_comment).strip()
+                                    comment="\n".join(current_comment).strip(),
                                 )
                             )
                         current_file = filename
@@ -358,11 +359,7 @@ Changed Files:
         # Save last comment if exists
         if current_file and current_comment:
             file_comments.append(
-                PRReviewComment(
-                    file_path=current_file,
-                    line_number=current_line,
-                    comment="\n".join(current_comment).strip()
-                )
+                PRReviewComment(file_path=current_file, line_number=current_line, comment="\n".join(current_comment).strip())
             )
 
         # Extract sections from review text
@@ -379,16 +376,16 @@ Changed Files:
             strengths=strengths,
             issues_found=issues_found,
             suggestions=suggestions,
-            confidence_score=0.85  # Default confidence
+            confidence_score=0.85,  # Default confidence
         )
 
     def _extract_section(self, text: str, section_headers: List[str]) -> Optional[str]:
         """Extract a section from markdown text based on headers
-        
+
         Args:
             text: Text to search
             section_headers: List of possible section headers
-            
+
         Returns:
             Extracted section text or None
         """
@@ -402,11 +399,11 @@ Changed Files:
 
     def _extract_list_section(self, text: str, section_headers: List[str]) -> List[str]:
         """Extract a list section from markdown text
-        
+
         Args:
             text: Text to search
             section_headers: List of possible section headers
-            
+
         Returns:
             List of extracted items
         """
@@ -429,34 +426,34 @@ Changed Files:
 
     def format_review_summary(self, review: PRReview) -> str:
         """Format review for GitHub comment or display
-        
+
         Args:
             review: PRReview object
-            
+
         Returns:
             Formatted markdown string
         """
         # Add header
         formatted = "## 🤖 AI Code Review (Powered by Gemini)\n\n"
-        
+
         # Add overall assessment
         if review.overall_assessment:
             formatted += f"### Overall Assessment\n\n{review.overall_assessment}\n\n"
-        
+
         # Add strengths
         if review.strengths:
             formatted += "### ✅ Strengths\n\n"
             for strength in review.strengths:
                 formatted += f"- {strength}\n"
             formatted += "\n"
-        
+
         # Add issues
         if review.issues_found:
             formatted += "### ⚠️ Issues Found\n\n"
             for issue in review.issues_found:
                 formatted += f"- {issue}\n"
             formatted += "\n"
-        
+
         # Add suggestions
         if review.suggestions:
             formatted += "### 💡 Suggestions\n\n"
@@ -484,7 +481,7 @@ Changed Files:
         jobs: List[Dict],
         failed_jobs: List[str],
         workflow_url: str = "",
-        repo_url: Optional[str] = None
+        repo_url: Optional[str] = None,
     ) -> str:
         """
         Analyze a GitHub Actions workflow run and provide insights
@@ -507,11 +504,9 @@ Changed Files:
         try:
             # Determine repo type and get appropriate prompt
             repo_type = self._get_repo_type(repo_url or "")
-            
+
             # Build prompt for workflow analysis
-            prompt = self._build_workflow_analysis_prompt(
-                workflow_name, conclusion, jobs, failed_jobs, repo_type
-            )
+            prompt = self._build_workflow_analysis_prompt(workflow_name, conclusion, jobs, failed_jobs, repo_type)
 
             # Generate analysis
             logger.info("Generating workflow analysis with Gemini API...")
@@ -525,22 +520,17 @@ Changed Files:
             return self._format_basic_workflow_analysis(conclusion, failed_jobs)
 
     def _build_workflow_analysis_prompt(
-        self,
-        workflow_name: str,
-        conclusion: str,
-        jobs: List[Dict],
-        failed_jobs: List[str],
-        repo_type: str = "default"
+        self, workflow_name: str, conclusion: str, jobs: List[Dict], failed_jobs: List[str], repo_type: str = "default"
     ) -> str:
         """Build the prompt for workflow analysis using repo-specific configuration
-        
+
         Args:
             workflow_name: Name of the workflow
             conclusion: Workflow conclusion
             jobs: List of job information
             failed_jobs: List of failed job names
             repo_type: Type of repository
-            
+
         Returns:
             Formatted prompt string
         """
@@ -596,15 +586,13 @@ Be concise, actionable, and helpful. Format your response with clear markdown se
 
         return prompt
 
-    def _format_basic_workflow_analysis(
-        self, conclusion: str, failed_jobs: List[str]
-    ) -> str:
+    def _format_basic_workflow_analysis(self, conclusion: str, failed_jobs: List[str]) -> str:
         """Fallback basic analysis when Gemini is not available
-        
+
         Args:
             conclusion: Workflow conclusion
             failed_jobs: List of failed job names
-            
+
         Returns:
             Basic analysis string
         """
@@ -618,4 +606,3 @@ Be concise, actionable, and helpful. Format your response with clear markdown se
             return analysis
         else:
             return f"⚠️ **Workflow {conclusion}**\n\nPlease check the workflow logs for details."
-
