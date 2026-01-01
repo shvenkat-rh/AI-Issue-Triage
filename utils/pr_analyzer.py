@@ -89,12 +89,13 @@ class PRAnalyzer:
 1. **Overall Assessment**: Brief summary of the PR
 2. **Strengths**: What was done well
 3. **Issues Found**: List any bugs, security issues, performance problems, or code quality concerns
+   - Check that every new function contains a docstring explaining its purpose and parameters
+   - Point out any missing docstrings
 4. **Suggestions**: Recommendations for improvement
 5. **File-specific Comments**: For each file with issues, provide:
    - File path
    - Line number (if applicable)
    - Specific comment
-6. Every new function should contain a docstring explaining its purpose and parameters. Please point it out.
 
 Format your response clearly with markdown. Be constructive and professional.""",
                         "workflow_analysis": """Please provide:
