@@ -83,32 +83,21 @@ class PRAnalyzer:
             "prompts": {
                 "default": {
                     "pr_review": {
-                        "system_role": "You are an expert code reviewer. Provide a direct code review analysis. Do NOT include acknowledgments like 'I will review' or 'Okay' - start immediately with the actual assessment.",
-                        "review_structure": """Format your response EXACTLY like this:
+                        "system_role": "You are an expert code reviewer. Review the following pull request and provide constructive feedback.",
+                        "review_structure": """Please provide a comprehensive code review with the following structure:
 
-## 1. Overall Assessment
-This PR adds [feature/fix]. The code quality is [good/needs improvement]. [Brief technical assessment of the changes]. [Ready/Not ready] to merge.
+1. **Overall Assessment**: Brief summary of the PR
+2. **Strengths**: What was done well
+3. **Issues Found**: List any bugs, security issues, performance problems, or code quality concerns
+   - Check that every new function contains a docstring explaining its purpose and parameters
+   - Point out any missing docstrings
+4. **Suggestions**: Recommendations for improvement
+5. **File-specific Comments**: For each file with issues, provide:
+   - File path
+   - Line number (if applicable)
+   - Specific comment
 
-## 2. Strengths
-- Well-structured code with clear separation of concerns
-- Comprehensive test coverage added
-- Good error handling implemented
-
-## 3. Issues Found
-- Missing docstring in function `example_function` at line 45
-- Potential performance issue in the loop at lines 120-130
-- Missing error handling for edge case X
-
-## 4. Suggestions
-- Add type hints to improve code maintainability
-- Consider extracting the logic in function Y into smaller functions
-- Update README with usage examples
-
-## 5. File-specific Comments
-- **`src/feature.py`** (line 45): Missing docstring explaining function purpose and parameters
-- **`tests/test_feature.py`** (line 30): Consider adding edge case tests
-
-Start directly with your assessment. DO NOT write acknowledgments or meta-commentary.""",
+Format your response clearly with markdown. Be constructive and professional.""",
                         "workflow_analysis": """Please provide:
 1. **Summary**: Brief overview of the workflow execution
 2. **Success Analysis**: If successful, highlight what worked well
@@ -376,37 +365,55 @@ Changed Files:
             )
 
         # Extract sections from review text
-        overall_assessment = self._extract_section(review_text, ["Overall Assessment", "Summary"])
+        overall_assessment = self._extract_section(review_text, ["Overall Assessment", "Summary", "Assessment"])
         strengths = self._extract_list_section(review_text, ["Strengths", "What was done well"])
         issues_found = self._extract_list_section(review_text, ["Issues Found", "Issues", "Problems"])
         suggestions = self._extract_list_section(review_text, ["Suggestions", "Recommendations"])
 
-        # If we couldn't extract an overall assessment but have review text, use a summary
+        # If we couldn't extract an overall assessment but have review text, use smart extraction
         if not overall_assessment and review_text:
-            # Take the first paragraph or first 500 characters as assessment
-            first_para = review_text.split("\n\n")[0].strip()
-            if first_para and not first_para.startswith("#"):
-                overall_assessment = first_para
-            else:
-                # Fallback: create assessment from what we found
+            # Remove common header patterns
+            clean_text = re.sub(r"^#+\s*", "", review_text)  # Remove leading #
+            clean_text = re.sub(r"^\*\*Overall Assessment\*\*:?\s*", "", clean_text, flags=re.IGNORECASE)
+
+            # Take the first meaningful paragraph (not a header, not empty)
+            paragraphs = [p.strip() for p in clean_text.split("\n\n") if p.strip()]
+            for para in paragraphs:
+                # Skip section headers
+                if para.startswith("#") or para.startswith("**"):
+                    continue
+                # Skip list items
+                if para.startswith("-") or para.startswith("*"):
+                    continue
+                # Skip numbered lists
+                if re.match(r"^\d+\.", para):
+                    continue
+                # This looks like actual content - use it
+                if len(para) > 20:  # Meaningful content
+                    overall_assessment = para
+                    break
+
+            # If still nothing, try to generate from findings
+            if not overall_assessment:
                 parts = []
                 if strengths:
-                    parts.append(f"Found {len(strengths)} strength(s)")
+                    parts.append(f"{len(strengths)} strength(s)")
                 if issues_found:
                     parts.append(f"{len(issues_found)} issue(s)")
                 if suggestions:
                     parts.append(f"{len(suggestions)} suggestion(s)")
 
                 if parts:
-                    overall_assessment = "This PR has " + ", ".join(parts) + "."
+                    overall_assessment = f"This PR has {', '.join(parts)} identified in the review."
                 else:
-                    overall_assessment = "Review completed. See full summary below."
+                    # Last resort: use the full review text (truncated)
+                    overall_assessment = review_text[:300] + ("..." if len(review_text) > 300 else "")
 
         # Create structured review
         return PRReview(
             summary=review_text,
             file_comments=file_comments,
-            overall_assessment=overall_assessment or "Review completed successfully.",
+            overall_assessment=overall_assessment or "Review analysis completed.",
             strengths=strengths,
             issues_found=issues_found,
             suggestions=suggestions,
@@ -424,11 +431,22 @@ Changed Files:
             Extracted section text or None
         """
         for header in section_headers:
-            # Look for markdown headers
-            pattern = rf"#+\s*\*?\*?{re.escape(header)}\*?\*?:?\s*\n(.*?)(?=\n#+|\Z)"
-            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
+            # Look for markdown headers with optional numbering (e.g., "## 1. Overall Assessment")
+            # Patterns to try:
+            patterns = [
+                rf"#+\s*\d*\.?\s*\*?\*?{re.escape(header)}\*?\*?:?\s*\n(.*?)(?=\n#+|\Z)",  # With optional number
+                rf"^\s*\d+\.\s*\*?\*?{re.escape(header)}\*?\*?:?\s*\n(.*?)(?=\n\d+\.|\Z)",  # Numbered list
+            ]
+
+            for pattern in patterns:
+                match = re.search(pattern, text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
+                if match:
+                    extracted = match.group(1).strip()
+                    # Clean up common artifacts
+                    extracted = re.sub(r"^[-*]\s*", "", extracted)  # Remove leading bullet
+                    extracted = re.sub(r"^\[.*?\]\s*", "", extracted)  # Remove [placeholder] style text
+                    if extracted and len(extracted) > 10:  # Ensure meaningful content
+                        return extracted
         return None
 
     def _extract_list_section(self, text: str, section_headers: List[str]) -> List[str]:
