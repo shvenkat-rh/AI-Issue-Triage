@@ -83,21 +83,32 @@ class PRAnalyzer:
             "prompts": {
                 "default": {
                     "pr_review": {
-                        "system_role": "You are an expert code reviewer. Review the following pull request and provide constructive feedback.",
-                        "review_structure": """Please provide a comprehensive code review with the following structure:
+                        "system_role": "You are an expert code reviewer. Provide a direct code review analysis. Do NOT include acknowledgments like 'I will review' or 'Okay' - start immediately with the actual assessment.",
+                        "review_structure": """Format your response EXACTLY like this:
 
-1. **Overall Assessment**: Brief summary of the PR
-2. **Strengths**: What was done well
-3. **Issues Found**: List any bugs, security issues, performance problems, or code quality concerns
-   - Check that every new function contains a docstring explaining its purpose and parameters
-   - Point out any missing docstrings
-4. **Suggestions**: Recommendations for improvement
-5. **File-specific Comments**: For each file with issues, provide:
-   - File path
-   - Line number (if applicable)
-   - Specific comment
+## 1. Overall Assessment
+This PR adds [feature/fix]. The code quality is [good/needs improvement]. [Brief technical assessment of the changes]. [Ready/Not ready] to merge.
 
-Format your response clearly with markdown. Be constructive and professional.""",
+## 2. Strengths
+- Well-structured code with clear separation of concerns
+- Comprehensive test coverage added
+- Good error handling implemented
+
+## 3. Issues Found
+- Missing docstring in function `example_function` at line 45
+- Potential performance issue in the loop at lines 120-130
+- Missing error handling for edge case X
+
+## 4. Suggestions
+- Add type hints to improve code maintainability
+- Consider extracting the logic in function Y into smaller functions
+- Update README with usage examples
+
+## 5. File-specific Comments
+- **`src/feature.py`** (line 45): Missing docstring explaining function purpose and parameters
+- **`tests/test_feature.py`** (line 30): Consider adding edge case tests
+
+Start directly with your assessment. DO NOT write acknowledgments or meta-commentary.""",
                         "workflow_analysis": """Please provide:
 1. **Summary**: Brief overview of the workflow execution
 2. **Success Analysis**: If successful, highlight what worked well
