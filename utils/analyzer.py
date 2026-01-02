@@ -131,11 +131,14 @@ You are an expert software engineer analyzing a code issue.
 Your task is to perform comprehensive issue analysis based on the provided codebase.
 
 CRITICAL INSTRUCTIONS:
-1. You MUST use actual code from the CODEBASE CONTENT section below
-2. You MUST include actual code snippets in diff format in your solutions
-3. You MUST reference specific file paths, line numbers, and function names from the provided code
-4. DO NOT use generic placeholders like "path/to/file.py" - use actual paths from the codebase
-5. If the codebase is insufficient, state what specific files/code you need
+1. You MUST analyze the provided codebase content below
+2. You MUST include actual code snippets in diff format for ALL proposed solutions
+3. When exact implementation files are missing but similar code exists:
+   - Use patterns from similar files in the codebase as examples
+   - Propose solutions based on the codebase's architecture and patterns
+   - Clearly state which files need modification (even if not in the codebase)
+4. ALWAYS provide multiple solutions with concrete code changes in diff format
+5. DO NOT say "codebase is insufficient" - propose solutions based on available context
 
 ISSUE DETAILS:
 Title: {title}
@@ -147,59 +150,88 @@ CODEBASE CONTENT:
 ANALYSIS REQUIREMENTS:
 1. **Issue Classification**: Determine if this is a 'bug', 'enhancement', or 'feature_request'
 2. **Severity Assessment**: Rate as 'low', 'medium', 'high', or 'critical'
-3. **Root Cause Analysis**: Identify the primary cause and contributing factors using actual code references
-4. **Code Location Identification**: Find relevant files, functions, and classes from the PROVIDED codebase
-5. **Solution Proposal**: Suggest specific code changes with actual code snippets in diff format
+3. **Root Cause Analysis**: Identify the primary cause using available code and patterns
+4. **Code Location Identification**: Identify files, functions, and classes (use patterns if exact files missing)
+5. **Solution Proposal**: Provide 2-3 concrete solutions with code snippets in diff format
 
 RESPONSE FORMAT (JSON):
 {{
     "issue_type": "bug|enhancement|feature_request",
     "severity": "low|medium|high|critical",
     "root_cause_analysis": {{
-        "primary_cause": "Main reason based on actual code analysis",
-        "contributing_factors": ["factor1 with code reference", "factor2 with code reference"],
+        "primary_cause": "Main reason based on code analysis and patterns",
+        "contributing_factors": ["factor1 with reference", "factor2 with reference"],
         "affected_components": ["component1 (file:line)", "component2 (file:line)"],
         "related_code_locations": [
             {{
-                "file_path": "actual/path/from/codebase.py",
+                "file_path": "path/from/codebase/or/inferred.py",
                 "line_number": 123,
-                "function_name": "actual_function_name",
-                "class_name": "ActualClassName"
+                "function_name": "function_name",
+                "class_name": "ClassName"
             }}
         ]
     }},
     "proposed_solutions": [
         {{
-            "description": "Solution description based on actual code structure",
-            "code_changes": "```diff\\n- old_code_line_from_codebase\\n+ new_code_line_with_fix\\n```",
+            "description": "Detailed solution description",
+            "code_changes": "```diff\\n--- a/file/path.py\\n+++ b/file/path.py\\n@@ -10,5 +10,8 @@\\n     existing_code()\\n-    old_line_to_remove()\\n+    new_line_to_add()\\n+    another_new_line()\\n```",
             "location": {{
-                "file_path": "actual/path/from/codebase.py",
+                "file_path": "inferred/or/actual/file.py",
                 "line_number": 123,
-                "function_name": "actual_function_name",
-                "class_name": "ActualClassName"
+                "function_name": "function_name",
+                "class_name": "ClassName"
             }},
-            "rationale": "Why this solution works based on the actual code patterns"
+            "rationale": "Why this solution works based on codebase patterns"
         }}
     ],
     "confidence_score": 0.85,
-    "analysis_summary": "Brief summary referencing actual code elements"
+    "analysis_summary": "Brief summary of analysis"
 }}
 
-ANALYSIS GUIDELINES:
-- Use ONLY information from the provided codebase
-- Include actual code snippets in diff format for all proposed solutions
-- Reference actual file paths, function names, and line numbers
-- Consider language-specific patterns and best practices
-- Look for patterns in existing code for consistency
-- Provide actionable, specific solutions with before/after code examples
-- If codebase is insufficient, explicitly state what additional context is needed
+SOLUTION GUIDELINES:
+1. **Always propose 2-3 solutions** with concrete code changes
+2. **Use diff format** for all code changes (show before/after)
+3. **When exact files are in codebase**: Use actual code snippets
+4. **When exact files are missing**: Infer from similar files and patterns in the codebase
+5. **Be specific**: Include function names, class names, and line number estimates
+6. **Show context**: Include surrounding code in diffs for clarity
 
-VALIDATION CHECKLIST (Your response MUST satisfy ALL):
-✓ All file paths are from the actual provided codebase (not generic placeholders)
-✓ All code snippets are actual code from the codebase (not hypothetical examples)
-✓ All proposed solutions include diff-format code changes with real code
-✓ All line numbers and function names reference actual code locations
-✓ Code changes show both before (from codebase) and after (with fix)
+DIFF FORMAT REQUIREMENTS:
+- Use proper diff format with --- and +++ headers
+- Include @@ line numbers @@
+- Show context lines (unchanged code)
+- Show - lines (code to remove)
+- Show + lines (code to add)
+- Example:
+```diff
+--- a/plugins/modules/ios_route_maps.py
++++ b/plugins/modules/ios_route_maps.py
+@@ -145,6 +145,10 @@ def generate_commands(self, config):
+     for entry in route_map.get('entries', []):
+         sequence = entry.get('sequence')
+         action = entry.get('action')
++        # Handle entries with only sequence and action
++        if not entry.get('match') and not entry.get('set'):
++            commands.append(f"route-map {{name}} {{action}} {{sequence}}")
++            continue
+         if entry.get('match'):
+             # existing match logic
+```
+
+ANALYSIS GUIDELINES:
+- Analyze the provided codebase thoroughly
+- Use patterns from similar files when exact files are missing
+- Reference actual code structures, naming conventions, and patterns
+- Consider language-specific patterns and best practices
+- Provide actionable, specific solutions with complete diff examples
+- Always include at least 2 solutions with different approaches
+
+MANDATORY OUTPUT REQUIREMENTS:
+✓ Propose 2-3 solutions minimum (not just tests)
+✓ All solutions must include diff-format code changes
+✓ Code changes must show actual implementation (not just descriptions)
+✓ Use file paths inferred from codebase structure when exact files missing
+✓ Include function/class context in all code changes
 
 Please analyze the issue and provide your response in the exact JSON format specified above.
 """
@@ -211,14 +243,15 @@ Please analyze the issue and provide your response in the exact JSON format spec
             "requires further investigation" in analysis.root_cause_analysis.primary_cause.lower(),
             "to be determined" in analysis.root_cause_analysis.primary_cause.lower(),
             "based on initial analysis" in analysis.root_cause_analysis.primary_cause.lower(),
-            "limited" in analysis.root_cause_analysis.primary_cause.lower() and "codebase" in analysis.root_cause_analysis.primary_cause.lower(),
-            "extremely limited" in analysis.root_cause_analysis.primary_cause.lower(),
-            "no codebase" in analysis.root_cause_analysis.primary_cause.lower(),
+            "codebase is insufficient" in analysis.root_cause_analysis.primary_cause.lower(),
+            "provided codebase is insufficient" in analysis.analysis_summary.lower(),
             # Check for generic solution descriptions
             any("requires further investigation" in solution.description.lower() for solution in analysis.proposed_solutions),
             any("to be determined" in solution.code_changes.lower() for solution in analysis.proposed_solutions),
             any("based on initial analysis" in solution.rationale.lower() for solution in analysis.proposed_solutions),
             any("without the actual codebase" in solution.description.lower() for solution in analysis.proposed_solutions),
+            # Check for insufficient number of solutions
+            len(analysis.proposed_solutions) < 2,
             # Check for very low confidence
             analysis.confidence_score < 0.6,
             # Check for generic file paths (placeholders)
@@ -226,8 +259,16 @@ Please analyze the issue and provide your response in the exact JSON format spec
             any("/path/" in solution.location.file_path.lower() for solution in analysis.proposed_solutions),
             any("file.py" == solution.location.file_path.lower() for solution in analysis.proposed_solutions),
             any("example" in solution.location.file_path.lower() for solution in analysis.proposed_solutions),
-            # Check for missing diff format in code changes
-            any("```diff" not in solution.code_changes for solution in analysis.proposed_solutions if solution.code_changes),
+            # Check for missing diff format in code changes (but allow test-only solutions)
+            any(
+                "```diff" not in solution.code_changes and 
+                "test" not in solution.description.lower() and
+                len(solution.code_changes) > 10
+                for solution in analysis.proposed_solutions
+            ),
+            # Check for solutions that are just test cases (need implementation too)
+            all("test" in solution.description.lower() or "test" in solution.location.file_path.lower() 
+                for solution in analysis.proposed_solutions),
             # Check for empty or very short analysis
             len(analysis.analysis_summary.strip()) < 50,
         ]
