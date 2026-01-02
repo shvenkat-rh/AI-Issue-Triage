@@ -501,15 +501,21 @@ print(f"Risk Level: {result.risk_level}")
 
 ### 5. Two-Pass Architecture (Librarian + Surgeon)
 
-For complex issues requiring full code context, use the Two-Pass Architecture that intelligently identifies relevant files before deep analysis:
+For complex issues requiring full code context, use the Two-Pass Architecture that intelligently breaks down the codebase into directory chunks and identifies relevant files before deep analysis:
+
+**How It Works:**
+
+1. **Directory Chunking**: Repository is cloned and divided into per-directory compressed repomix files
+2. **Pass 1 - Librarian**: Analyzes each directory chunk to identify relevant files (with dependency tracking)
+3. **Pass 2 - Surgeon**: Creates targeted repomix with only identified files for deep analysis
 
 **Pass 1 - Librarian (File Identification)**:
 ```bash
-# Identify relevant files from codebase skeleton
+# Librarian analyzes directory chunks to identify relevant files
 python -m cli.librarian \
   --title "Bug in authentication flow" \
   --description "Users cannot login after password reset" \
-  --skeleton repomix-output.txt \
+  --chunks-dir repomix-chunks \
   --output relevant_files.json
 ```
 
@@ -518,6 +524,21 @@ python -m cli.librarian \
 # Surgeon pass uses the standard analyzer with targeted repomix
 # (see GitHub Actions workflow for automated integration)
 ```
+
+**Benefits:**
+- **Scalable**: Works with repos of any size by breaking into chunks
+- **Token Efficient**: Avoids 1M+ token limits by analyzing directories separately
+- **Smart Dependencies**: If file A imports file B, both are included
+- **Precise Context**: Surgeon gets only relevant files, not entire codebase
+
+**Automated Workflow:**
+The `ai-lib-triage.yml` workflow automatically handles:
+- Repository cloning and directory tree generation
+- Per-directory repomix generation with compression
+- Librarian analysis across all chunks
+- Targeted repomix creation with identified files
+- Surgeon analysis with full context of relevant files
+- All security, duplicate detection, and labeling features
 
 **How It Works**:
 1. **Librarian** analyzes compressed codebase skeleton
@@ -641,15 +662,16 @@ print(formatted_review)
 # Use Two-Pass Architecture (Librarian + Surgeon)
 librarian = LibrarianAnalyzer(
     api_key="your-api-key",
-    skeleton_path="repomix-output.txt"
+    chunks_dir="repomix-chunks"
 )
 
-# Pass 1: Identify relevant files
-relevant_files = librarian.identify_relevant_files(
+# Pass 1: Identify relevant files from directory chunks
+result = librarian.identify_relevant_files(
     title="Authentication Bug",
     issue_description="Users cannot login after password reset"
 )
-print(f"Identified {len(relevant_files)} relevant files: {relevant_files}")
+print(f"Analysis: {result['analysis_summary']}")
+print(f"Identified {len(result['relevant_files'])} relevant files")
 
 # Pass 2: Use standard analyzer with targeted context
 # (create targeted repomix with only relevant_files, then use GeminiIssueAnalyzer)

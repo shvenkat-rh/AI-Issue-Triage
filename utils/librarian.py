@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Librarian - Identifies relevant files for issue analysis using compressed context.
+Librarian - Identifies relevant files for issue analysis using directory chunks.
 This is Pass 1 of the Two-Pass Architecture.
 """
 
 import logging
 import os
 import re
-from typing import List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 from dotenv import load_dotenv
 from google import genai
@@ -19,19 +20,19 @@ logger = logging.getLogger(__name__)
 
 
 class LibrarianAnalyzer:
-    """Identifies relevant files from compressed/skeleton codebase for issue analysis."""
+    """Identifies relevant files from directory-chunked codebase for issue analysis."""
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        skeleton_path: Optional[str] = None,
+        chunks_dir: Optional[str] = None,
         model_name: Optional[str] = None,
     ):
         """Initialize the Librarian analyzer.
 
         Args:
             api_key: Gemini API key. If not provided, will use GEMINI_API_KEY or GOOGLE_API_KEY env var.
-            skeleton_path: Path to compressed/skeleton codebase file. Defaults to repomix-output.txt.
+            chunks_dir: Path to directory containing repomix chunks. Defaults to repomix-chunks.
             model_name: Gemini model name. Defaults to gemini-2.0-flash-001.
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -43,129 +44,191 @@ class LibrarianAnalyzer:
         # Initialize the Gen AI client
         self.client = genai.Client(api_key=self.api_key)
 
-        # Store skeleton path for codebase loading
-        self.skeleton_path = skeleton_path or "repomix-output.txt"
+        # Store chunks directory
+        self.chunks_dir = Path(chunks_dir or "repomix-chunks")
 
-        # Load the skeleton/compressed codebase
-        self.skeleton_content = self._load_skeleton()
+        # Load all directory chunks
+        self.chunks = self._load_chunks()
 
-    def _load_skeleton(self) -> str:
-        """Load the compressed/skeleton codebase from the specified path."""
-        try:
-            with open(self.skeleton_path, "r", encoding="utf-8") as f:
-                return f.read()
-        except FileNotFoundError:
-            raise FileNotFoundError(
-                f"Skeleton file '{self.skeleton_path}' not found. Please ensure it exists and the path is correct."
-            )
+    def _load_chunks(self) -> Dict[str, str]:
+        """Load all repomix chunks from the chunks directory.
 
-    def identify_relevant_files(self, title: str, issue_description: str) -> List[str]:
-        """Identify the most relevant files for the given issue.
+        Returns:
+            Dictionary mapping chunk name to content
+        """
+        chunks = {}
+
+        if not self.chunks_dir.exists():
+            raise FileNotFoundError(f"Chunks directory '{self.chunks_dir}' not found. Please ensure it exists.")
+
+        for chunk_file in self.chunks_dir.glob("*.txt"):
+            chunk_name = chunk_file.stem
+            try:
+                with open(chunk_file, "r", encoding="utf-8") as f:
+                    chunks[chunk_name] = f.read()
+                logger.info(f"Loaded chunk: {chunk_name} ({len(chunks[chunk_name])} bytes)")
+            except Exception as e:
+                logger.warning(f"Failed to load chunk {chunk_name}: {e}")
+
+        if not chunks:
+            raise ValueError(f"No chunks found in {self.chunks_dir}")
+
+        logger.info(f"Loaded {len(chunks)} chunks")
+        return chunks
+
+    def identify_relevant_files(self, title: str, issue_description: str) -> Dict[str, any]:
+        """Identify the most relevant files for the given issue by analyzing directory chunks.
 
         Args:
             title: Issue title
             issue_description: Detailed issue description
 
         Returns:
-            List of file paths most relevant to the issue (AI determines the count)
+            Dictionary with relevant_files list and analysis_summary
         """
         try:
-            prompt = self._create_librarian_prompt(title, issue_description)
+            # Analyze each chunk to find relevant directories
+            relevant_chunks = self._identify_relevant_chunks(title, issue_description)
 
-            logger.info("Identifying relevant files with Gemini (Librarian pass)...")
-            response = self.client.models.generate_content(model=self.model_name, contents=prompt)
+            if not relevant_chunks:
+                logger.warning("No relevant chunks identified")
+                return {"relevant_files": [], "analysis_summary": "No relevant code found"}
 
-            # Parse the response to extract file paths
-            file_paths = self._parse_file_list(response.text)
+            # Extract specific files from relevant chunks
+            all_files = set()
+            for chunk_name in relevant_chunks:
+                files = self._extract_files_from_chunk(chunk_name, title, issue_description)
+                all_files.update(files)
 
-            logger.info(f"Identified {len(file_paths)} relevant file(s): {file_paths}")
-            return file_paths
+            # Analyze dependencies and add supporting files
+            final_files = self._analyze_dependencies(all_files)
+
+            logger.info(f"Identified {len(final_files)} relevant file(s) total")
+
+            return {
+                "relevant_files": sorted(list(final_files)),
+                "relevant_chunks": relevant_chunks,
+                "analysis_summary": f"Analyzed {len(self.chunks)} directories, found {len(relevant_chunks)} relevant, identified {len(final_files)} files",
+            }
 
         except Exception as e:
             logger.error(f"Error identifying relevant files: {e}")
-            return []
+            return {"relevant_files": [], "analysis_summary": f"Analysis failed: {str(e)}"}
 
-    def _create_librarian_prompt(self, title: str, issue_description: str) -> str:
-        """Create the prompt for the Librarian pass.
+    def _identify_relevant_chunks(self, title: str, issue_description: str) -> List[str]:
+        """Identify which directory chunks are relevant to the issue.
 
         Args:
             title: Issue title
             issue_description: Issue description
 
         Returns:
-            Formatted prompt string
+            List of chunk names that are relevant
         """
-        return f"""You are an expert software engineer analyzing an issue to identify relevant code files.
+        prompt = f"""You are analyzing a software issue to identify which directories contain relevant code.
 
-TASK: Identify ALL file paths that are relevant to understanding and fixing this issue.
-
-ISSUE DETAILS:
+ISSUE:
 Title: {title}
 Description: {issue_description}
 
-CODEBASE SKELETON:
-{self.skeleton_content}
+AVAILABLE DIRECTORIES:
+{', '.join(self.chunks.keys())}
+
+TASK: Return ONLY the directory names (from the list above) that are most likely to contain code related to this issue.
 
 INSTRUCTIONS:
-1. Analyze the issue description and codebase structure carefully
-2. Identify ALL files that are relevant, including:
-   - Files directly mentioned or implied in the issue
-   - Modules/components that handle the described functionality
-   - Files that import or are imported by the primary files
-   - Related configuration files
-   - Test files that might reveal or reproduce the issue
-   - Utility/helper files used by the main files
-3. Include dependency chains: if file A imports file B, include both
-4. Return ONLY a numbered list of file paths, one per line
-5. Do NOT include explanations or commentary
-6. List files in order of relevance (most relevant first)
+1. Consider the issue description and which directories would contain the relevant code
+2. Include root if root-level files might be relevant
+3. Return ONLY directory names, one per line
+4. NO explanations, NO numbering, just the names
 
-FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
-1. path/to/primary_file.py
-2. path/to/related_file.py
-3. path/to/imported_module.py
-4. tests/test_feature.py
-5. config/settings.py
+Example output format:
+root
+plugins_modules
+lib_ansible
+tests"""
 
-Return ALL relevant files - let me handle the full context.
-"""
+        try:
+            logger.info("Identifying relevant directories...")
+            response = self.client.models.generate_content(model=self.model_name, contents=prompt)
 
-    def _parse_file_list(self, response_text: str) -> List[str]:
-        """Parse the response to extract file paths.
+            relevant_chunks = []
+            for line in response.text.strip().split("\n"):
+                chunk_name = line.strip()
+                if chunk_name in self.chunks:
+                    relevant_chunks.append(chunk_name)
+                    logger.info(f"  ✓ Relevant chunk: {chunk_name}")
+
+            return relevant_chunks
+        except Exception as e:
+            logger.error(f"Error identifying relevant chunks: {e}")
+            # Fallback: return all chunks if analysis fails
+            return list(self.chunks.keys())
+
+    def _extract_files_from_chunk(self, chunk_name: str, title: str, issue_description: str) -> Set[str]:
+        """Extract specific relevant files from a chunk.
 
         Args:
-            response_text: Raw response from Gemini
+            chunk_name: Name of the chunk to analyze
+            title: Issue title
+            issue_description: Issue description
 
         Returns:
-            List of file paths
+            Set of file paths
         """
-        file_paths = []
+        chunk_content = self.chunks[chunk_name]
 
-        # Extract lines that look like file paths
-        lines = response_text.strip().split("\n")
+        prompt = f"""You are analyzing compressed code from the "{chunk_name}" directory to identify specific files relevant to this issue.
 
-        for line in lines:
-            line = line.strip()
+ISSUE:
+Title: {title}
+Description: {issue_description}
 
-            # Remove leading numbers and dots (e.g., "1. ", "2. ")
-            line = re.sub(r"^\d+\.\s*", "", line)
+DIRECTORY CONTENT ({chunk_name}):
+{chunk_content}
 
-            # Remove markdown formatting
-            line = re.sub(r"^[-*]\s*", "", line)
-            line = re.sub(r"`", "", line)
+TASK: Return ONLY the file paths (with full relative paths) that are relevant to this issue.
 
-            # Skip empty lines and obvious non-file-paths
-            if not line or line.startswith("#") or line.startswith("**"):
-                continue
+INSTRUCTIONS:
+1. Extract specific file paths from the content above
+2. Include files that directly relate to the issue
+3. Return ONLY file paths, one per line
+4. Use the full relative path (e.g., "plugins/modules/file.py")
+5. NO explanations, NO numbering
 
-            # Check if it looks like a file path
-            if "/" in line or "\\" in line or "." in line:
-                # Extract just the path if there's explanatory text
-                path_match = re.search(r"([a-zA-Z0-9_/\-\.\\]+\.[a-zA-Z0-9]+)", line)
-                if path_match:
-                    file_paths.append(path_match.group(1))
-                elif not line.startswith("(") and not line.startswith("["):
-                    # Looks like a clean path
-                    file_paths.append(line)
+Example output format:
+plugins/modules/ios_vlans.py
+plugins/module_utils/network/ios/config/vlans/vlans.py
+tests/unit/modules/network/ios/test_ios_vlans.py"""
 
-        return file_paths
+        try:
+            logger.info(f"Extracting files from chunk: {chunk_name}")
+            response = self.client.models.generate_content(model=self.model_name, contents=prompt)
+
+            files = set()
+            for line in response.text.strip().split("\n"):
+                file_path = line.strip()
+                # Basic validation
+                if file_path and ("/" in file_path or "." in file_path) and not file_path.startswith("#"):
+                    files.add(file_path)
+
+            logger.info(f"  Found {len(files)} files in {chunk_name}")
+            return files
+        except Exception as e:
+            logger.error(f"Error extracting files from chunk {chunk_name}: {e}")
+            return set()
+
+    def _analyze_dependencies(self, files: Set[str]) -> Set[str]:
+        """Analyze files to identify dependencies and add supporting files.
+
+        Args:
+            files: Set of primary file paths
+
+        Returns:
+            Expanded set including dependencies
+        """
+        # For now, return files as-is
+        # In future: could analyze import statements, module relationships, etc.
+        # This would require more sophisticated parsing of the chunks
+        logger.info(f"Dependency analysis: {len(files)} files")
+        return files

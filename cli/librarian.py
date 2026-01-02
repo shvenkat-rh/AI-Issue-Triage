@@ -21,14 +21,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Identify relevant files for an issue
-  python -m cli.librarian --title "Bug" --description "Login fails" --skeleton repomix-output.txt
+  # Identify relevant files for an issue using directory chunks
+  python -m cli.librarian --title "Bug" --description "Login fails" --chunks-dir repomix-chunks
 
   # Output as JSON
   python -m cli.librarian --title "Bug" --description "Details" --output files.json
 
-  # Specify custom skeleton file
-  python -m cli.librarian --title "Bug" --description "Details" --skeleton custom-skeleton.txt
+  # Specify custom chunks directory
+  python -m cli.librarian --title "Bug" --description "Details" --chunks-dir custom-chunks/
         """,
     )
 
@@ -36,11 +36,11 @@ Examples:
     parser.add_argument("--title", "-t", required=True, help="Issue title")
     parser.add_argument("--description", "-d", required=True, help="Issue description")
     parser.add_argument(
-        "--skeleton",
-        "-s",
+        "--chunks-dir",
+        "-c",
         type=str,
-        default="repomix-output.txt",
-        help="Path to skeleton/compressed codebase file (default: repomix-output.txt)",
+        default="repomix-chunks",
+        help="Path to directory containing repomix chunks (default: repomix-chunks)",
     )
 
     # Configuration options
@@ -59,11 +59,11 @@ Examples:
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    logger.info(f"Initializing Librarian with skeleton: {args.skeleton}")
+    logger.info(f"Initializing Librarian with chunks directory: {args.chunks_dir}")
 
     # Initialize Librarian
     try:
-        librarian = LibrarianAnalyzer(api_key=args.api_key, skeleton_path=args.skeleton, model_name=args.model)
+        librarian = LibrarianAnalyzer(api_key=args.api_key, chunks_dir=args.chunks_dir, model_name=args.model)
     except Exception as e:
         logger.error(f"Error initializing Librarian: {e}")
         sys.exit(1)
@@ -71,24 +71,32 @@ Examples:
     # Identify relevant files
     try:
         logger.info(f"Analyzing issue: {args.title}")
-        file_paths = librarian.identify_relevant_files(title=args.title, issue_description=args.description)
+        result = librarian.identify_relevant_files(title=args.title, issue_description=args.description)
 
-        if not file_paths:
+        if not result["relevant_files"]:
             logger.warning("No relevant files identified")
             sys.exit(1)
 
-        logger.info(f"✅ Identified {len(file_paths)} relevant file(s)")
+        logger.info(f"✅ {result['analysis_summary']}")
 
         # Prepare output
-        result = {"issue_title": args.title, "issue_description": args.description, "relevant_files": file_paths}
+        output_data = {
+            "issue_title": args.title,
+            "issue_description": args.description,
+            "relevant_files": result["relevant_files"],
+            "analysis_summary": result["analysis_summary"],
+        }
+
+        if "relevant_chunks" in result:
+            output_data["relevant_chunks"] = result["relevant_chunks"]
 
         # Output results
         if args.output:
             with open(args.output, "w", encoding="utf-8") as f:
-                json.dump(result, f, indent=2)
+                json.dump(output_data, f, indent=2)
             logger.info(f"Results saved to {args.output}")
         else:
-            print(json.dumps(result, indent=2))
+            print(json.dumps(output_data, indent=2))
 
     except Exception as e:
         logger.error(f"Error identifying relevant files: {e}")

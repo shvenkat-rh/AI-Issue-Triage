@@ -36,24 +36,90 @@ jobs:
           echo "Repomix installed successfully"
           repomix --version
 
-      - name: Generate repomix skeleton for Librarian
+      - name: Clone repository and generate directory structure
         run: |
           echo "Reading configuration from triage.config.json..."
           REPO_URL=$(jq -r '.repository.url' triage.config.json)
           
-          echo "Generating compressed skeleton for Librarian (Pass 1)..."
-          # Generate maximally compressed skeleton for file identification
-          repomix \
-            --remote "$REPO_URL" \
-            --style plain \
-            --compress \
-            --remove-comments \
-            --remove-empty-lines \
-            --output repomix-skeleton.txt
+          # Clone the repository
+          echo "Cloning repository: $REPO_URL"
+          git clone --depth 1 "$REPO_URL" repo-clone
+          cd repo-clone
           
-          echo "Skeleton generated successfully"
-          echo "Skeleton size: $(wc -c < repomix-skeleton.txt) bytes"
-          ls -lh repomix-skeleton.txt
+          # Generate tree structure
+          echo "Generating directory tree..."
+          find . -type d -not -path '*/\.*' | sort > ../repo-tree.txt
+          
+          echo "Directory tree generated:"
+          cat ../repo-tree.txt
+          
+          echo "Total directories: $(wc -l < ../repo-tree.txt)"
+
+      - name: Generate per-directory repomix files
+        run: |
+          echo "Generating compressed repomix files for each directory..."
+          
+          cd repo-clone
+          REPO_URL=$(jq -r '.repository.url' ../triage.config.json)
+          
+          mkdir -p ../repomix-chunks
+          
+          # Generate repomix for root directory files only (not subdirectories)
+          echo "Processing root directory..."
+          ROOT_FILES=$(find . -maxdepth 1 -type f -not -path '*/\.*' | tr '\n' ' ')
+          
+          if [ -n "$ROOT_FILES" ]; then
+            repomix \
+              --include $ROOT_FILES \
+              --style plain \
+              --compress \
+              --remove-comments \
+              --remove-empty-lines \
+              --no-file-summary \
+              --no-directory-structure \
+              --output ../repomix-chunks/root.txt 2>/dev/null || echo "Root files repomix skipped"
+          fi
+          
+          # Generate repomix for each subdirectory
+          while IFS= read -r dir; do
+            if [ "$dir" = "." ]; then
+              continue
+            fi
+            
+            # Clean directory name for filename (replace / with _)
+            CLEAN_DIR=$(echo "$dir" | sed 's/^\.\///' | sed 's/\//_/g')
+            
+            if [ -z "$CLEAN_DIR" ]; then
+              continue
+            fi
+            
+            echo "Processing directory: $dir -> $CLEAN_DIR"
+            
+            # Generate compressed repomix for this directory with all compression options
+            repomix \
+              --include "$dir/**" \
+              --style plain \
+              --compress \
+              --remove-comments \
+              --remove-empty-lines \
+              --no-file-summary \
+              --no-directory-structure \
+              --output "../repomix-chunks/${CLEAN_DIR}.txt" 2>/dev/null || {
+              echo "  Skipped (empty or error)"
+              continue
+            }
+            
+            # Check size
+            if [ -f "../repomix-chunks/${CLEAN_DIR}.txt" ]; then
+              SIZE=$(wc -c < "../repomix-chunks/${CLEAN_DIR}.txt")
+              echo "  Generated: ${CLEAN_DIR}.txt (${SIZE} bytes)"
+            fi
+          done < ../repo-tree.txt
+          
+          cd ..
+          echo "All directory chunks generated:"
+          ls -lh repomix-chunks/
+          echo "Total chunks: $(ls repomix-chunks/ | wc -l)"
 
       - name: Clone AI-Issue-Triage repository
         uses: actions/checkout@v4
@@ -301,24 +367,36 @@ jobs:
         run: |
           cd ai-triage
           
-          echo "📚 Pass 1: Librarian - Identifying relevant files from compressed skeleton..."
+          echo "📚 Pass 1: Librarian - Analyzing directory chunks to identify relevant files..."
           
-          # Copy compressed skeleton for Librarian
-          cp ../repomix-skeleton.txt ./repomix-output.txt
+          # Create a directory map for Librarian
+          echo "Preparing directory chunks for analysis..."
+          cp -r ../repomix-chunks ./
+          ls -lh repomix-chunks/
           
-          echo "Skeleton size for Librarian: $(wc -c < repomix-output.txt) bytes"
-          
-          # Run Librarian with compressed skeleton
+          # Run Librarian with all directory chunks
           python -m cli.librarian \
             --title "${{ github.event.issue.title }}" \
             --description "${{ github.event.issue.body }}" \
-            --skeleton repomix-output.txt \
+            --chunks-dir repomix-chunks \
             --output librarian_result.json \
             --verbose
           
           if [ -f librarian_result.json ]; then
             echo "librarian_success=true" >> $GITHUB_OUTPUT
-            echo "✅ Librarian identified relevant files from skeleton"
+            echo "✅ Librarian identified relevant files from directory analysis"
+            
+            # Show identified files
+            echo "Relevant files identified:"
+            jq -r '.relevant_files[]' librarian_result.json | nl
+            
+            # Show analysis summary
+            if jq -e '.analysis_summary' librarian_result.json > /dev/null; then
+              echo ""
+              echo "Analysis summary:"
+              jq -r '.analysis_summary' librarian_result.json
+            fi
+            
             cat librarian_result.json
           else
             echo "librarian_success=false" >> $GITHUB_OUTPUT
@@ -558,8 +636,9 @@ jobs:
             prompt_injection_result.json
             existing_issues.json
             duplicate_result.json
+            repo-tree.txt
+            repomix-chunks/
             ai-triage/librarian_result.json
-            repomix-skeleton.txt
             targeted-repomix-output.txt
             analysis_result.txt
             analysis_result.json
