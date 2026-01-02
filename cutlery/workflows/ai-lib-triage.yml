@@ -46,26 +46,35 @@ jobs:
           git clone --depth 1 "$REPO_URL" repo-clone
           cd repo-clone
           
-          # Check for .omit-triage file
-          OMIT_PATTERN=""
+          # Get root-level directories only (excluding hidden dirs like .git)
+          echo "Getting root-level directories..."
+          find . -maxdepth 1 -type d -not -name '.' -not -name '..*' | sed 's|^\./||' | sort > ../all-dirs.txt
+          
+          # Check for .omit-triage file and filter
           if [ -f .omit-triage ]; then
-            echo "Found .omit-triage file, reading exclusions..."
+            echo "Found .omit-triage file, applying exclusions..."
+            cat .omit-triage
+            
+            # Filter out omitted directories
             while IFS= read -r line; do
               # Skip empty lines and comments
               if [ -n "$line" ] && [[ ! "$line" =~ ^# ]]; then
                 echo "  Excluding: $line"
-                OMIT_PATTERN="$OMIT_PATTERN -not -path './$line' -not -path './$line/*'"
               fi
             done < .omit-triage
+            
+            # Use grep to filter out excluded directories
+            grep -v -f .omit-triage ../all-dirs.txt > ../root-dirs.txt || cp ../all-dirs.txt ../root-dirs.txt
+          else
+            echo "No .omit-triage file found, processing all directories"
+            cp ../all-dirs.txt ../root-dirs.txt
           fi
           
-          # Get root-level directories only (excluding hidden dirs like .git)
-          echo "Getting root-level directories..."
-          find . -maxdepth 1 -type d -not -name '.' -not -name '..*' $OMIT_PATTERN | sort > ../root-dirs.txt
-          
-          echo "Root directories found:"
+          echo ""
+          echo "Root directories to process:"
           cat ../root-dirs.txt
           
+          echo ""
           echo "Total directories: $(wc -l < ../root-dirs.txt)"
 
       - name: Generate per-directory repomix files
@@ -77,18 +86,18 @@ jobs:
           
           # Process each root-level directory
           while IFS= read -r dir; do
-            if [ -z "$dir" ] || [ "$dir" = "." ]; then
+            if [ -z "$dir" ]; then
               continue
             fi
             
-            # Clean directory name for filename (remove leading ./ and replace / with _)
-            CLEAN_DIR=$(echo "$dir" | sed 's/^\.\///' | sed 's/\//_/g')
+            # Clean directory name for filename (replace / with _)
+            CLEAN_DIR=$(echo "$dir" | sed 's/\//_/g')
             
             echo "Processing directory: $dir -> ${CLEAN_DIR}.txt"
             
             # Generate compressed repomix for this directory
             repomix \
-              --include "$dir/**" \
+              --include "./$dir/**" \
               --style plain \
               --compress \
               --remove-comments \
@@ -610,37 +619,139 @@ jobs:
             const issueType = '${{ steps.parse.outputs.issue_type }}';
             const severity = '${{ steps.parse.outputs.severity }}';
             
-            const labelsToAdd = [];
+            // Get current labels on the issue
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const currentLabels = issue.labels.map(label => 
+              typeof label === 'string' ? label : label.name
+            );
+            
+            console.log(`Current labels: ${currentLabels.join(', ')}`);
+            
+            // Remove old type:* and severity:* labels and old type labels to avoid conflicts
+            const labelsToRemove = currentLabels.filter(label => 
+              label.startsWith('type:') || label.startsWith('severity:') ||
+              label.startsWith('Type : ') || label.startsWith('Severity : ') ||
+              ['Bug', 'Enhancement', 'Feature request', 'Documentation', 'Question', 'Task',
+               'Critical', 'High', 'Medium', 'Low'].includes(label)
+            );
+            
+            if (labelsToRemove.length > 0) {
+              console.log(`Removing old labels: ${labelsToRemove.join(', ')}`);
+              for (const label of labelsToRemove) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    name: label
+                  });
+                } catch (error) {
+                  console.log(`Failed to remove label ${label}: ${error.message}`);
+                }
+              }
+            }
+            
+            // Prepare new labels to add
+            const labels = [];
             
             // Add gemini-analyzed label (unless duplicate)
             if (!isDuplicate && issueType) {
-              labelsToAdd.push('gemini-analyzed');
+              labels.push('gemini-analyzed');
               
-              // Add type label
-              if (issueType) {
-                labelsToAdd.push(`type:${issueType}`);
+              // Create and add type label with proper format
+              if (issueType && issueType !== 'null' && issueType !== '') {
+                const typeValue = issueType.charAt(0).toUpperCase() + issueType.slice(1).toLowerCase();
+                const typeLabel = `Type : ${typeValue}`;
+                const typeColors = {
+                  'Bug': 'd73a4a',
+                  'Enhancement': 'a2eeef',
+                  'Feature request': '0052cc',
+                  'Documentation': '0075ca',
+                  'Question': 'd876e3',
+                  'Task': '1d76db'
+                };
+                const typeColor = typeColors[typeValue] || 'ededed';
+                
+                // Create or update the label
+                try {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: typeLabel,
+                    color: typeColor,
+                    description: `AI-generated: Issue type classified as ${typeValue.toLowerCase()}`
+                  });
+                } catch (error) {
+                  if (error.status === 422) {
+                    await github.rest.issues.updateLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: typeLabel,
+                      color: typeColor,
+                      description: `AI-generated: Issue type classified as ${typeValue.toLowerCase()}`
+                    });
+                  }
+                }
+                
+                labels.push(typeLabel);
               }
               
-              // Add severity label
-              if (severity) {
-                labelsToAdd.push(`severity:${severity}`);
+              // Create and add severity label with proper format
+              if (severity && severity !== 'null' && severity !== '') {
+                const severityValue = severity.charAt(0).toUpperCase() + severity.slice(1).toLowerCase();
+                const severityLabel = `Severity : ${severityValue}`;
+                const severityColors = {
+                  'Critical': 'b60205',
+                  'High': 'd93f0b',
+                  'Medium': 'fbca04',
+                  'Low': '0e8a16'
+                };
+                const severityColor = severityColors[severityValue] || 'ededed';
+                
+                // Create or update the label
+                try {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: severityLabel,
+                    color: severityColor,
+                    description: `AI-generated: Severity level assessed as ${severityValue.toLowerCase()}`
+                  });
+                } catch (error) {
+                  if (error.status === 422) {
+                    await github.rest.issues.updateLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: severityLabel,
+                      color: severityColor,
+                      description: `AI-generated: Severity level assessed as ${severityValue.toLowerCase()}`
+                    });
+                  }
+                }
+                
+                labels.push(severityLabel);
               }
             }
             
             // Add duplicate label
             if (isDuplicate) {
-              labelsToAdd.push('duplicate');
+              labels.push('duplicate');
             }
             
-            if (labelsToAdd.length > 0) {
+            if (labels.length > 0) {
               try {
                 await github.rest.issues.addLabels({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: context.issue.number,
-                  labels: labelsToAdd
+                  labels: labels
                 });
-                console.log(`Added labels: ${labelsToAdd.join(', ')}`);
+                console.log(`Added labels: ${labels.join(', ')}`);
               } catch (error) {
                 console.error('Error adding labels:', error);
               }

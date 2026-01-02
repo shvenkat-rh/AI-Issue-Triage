@@ -208,8 +208,16 @@ tests/unit/modules/network/ios/test_ios_vlans.py"""
             files = set()
             for line in response.text.strip().split("\n"):
                 file_path = line.strip()
-                # Basic validation
-                if file_path and ("/" in file_path or "." in file_path) and not file_path.startswith("#"):
+                # Basic validation - must have / and a file extension, not start with # or be too long
+                if (
+                    file_path
+                    and "/" in file_path
+                    and "." in file_path.split("/")[-1]  # Has extension in filename
+                    and not file_path.startswith("#")
+                    and not file_path.lower().startswith("there")  # Filter out error messages
+                    and not file_path.lower().startswith("no ")
+                    and len(file_path) < 200  # Reasonable path length
+                ):
                     files.add(file_path)
 
             logger.info(f"  Found {len(files)} files in {chunk_name}")
