@@ -25,6 +25,7 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 ## Features
 
 - **AI-Powered Analysis**: Uses Google Gemini 2.0 Flash for intelligent issue analysis with the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/)
+- **Two-Pass Architecture**: Librarian identifies relevant files, Surgeon performs deep analysis on targeted context
 - **Root Cause Analysis**: Identifies primary causes and contributing factors
 - **Solution Generation**: Proposes specific code changes with rationale
 - **Issue Triage**: Automatically classifies issues as bugs, enhancements, or feature requests
@@ -498,6 +499,60 @@ print(f"Risk Level: {result.risk_level}")
 
 ---
 
+### 5. Two-Pass Architecture (Librarian + Surgeon)
+
+For complex issues requiring full code context, use the Two-Pass Architecture that intelligently identifies relevant files before deep analysis:
+
+**Pass 1 - Librarian (File Identification)**:
+```bash
+# Identify relevant files from codebase skeleton
+python -m cli.librarian \
+  --title "Bug in authentication flow" \
+  --description "Users cannot login after password reset" \
+  --skeleton repomix-output.txt \
+  --output relevant_files.json
+```
+
+**Pass 2 - Surgeon (Deep Analysis)** - Use existing analyzer with targeted files:
+```bash
+# Surgeon pass uses the standard analyzer with targeted repomix
+# (see GitHub Actions workflow for automated integration)
+```
+
+**How It Works**:
+1. **Librarian** analyzes compressed codebase skeleton
+2. AI identifies ALL relevant files (no arbitrary limits)
+3. Includes dependency chains (if file A imports B, both included)
+4. Creates **targeted repomix** with only identified files
+5. **Surgeon** performs deep analysis with focused context
+6. Results in more accurate analysis with lower token usage
+
+**Features**:
+- AI determines relevant file count (no manual limits)
+- Automatic dependency inclusion
+- Targeted codebase generation
+- Integrates with existing analyzer (Surgeon)
+- GitHub Actions workflow available (`ai-lib-triage.yml`)
+
+**GitHub Workflow**:
+The `ai-lib-triage.yml` workflow provides:
+- Label-triggered ("AI_Triage" or bypass label)
+- Security checks with prompt injection detection
+- Duplicate detection
+- Two-pass analysis (Librarian → Targeted Repomix → Surgeon)
+- Auto-labeling based on results
+- Comprehensive comments with file lists
+
+**When to Use**:
+- ✅ Subtle bugs requiring full code context
+- ✅ Complex issues spanning multiple files
+- ✅ Issues where file location is unclear
+- ✅ Large codebases where full context exceeds token limits
+
+**Status**: ✅ Stable and ready for use
+
+---
+
 ### Programmatic Usage (Python Library)
 
 You can also use the analyzer programmatically:
@@ -512,6 +567,7 @@ from utils.duplicate import CosineDuplicateAnalyzer, GeminiDuplicateAnalyzer
 from utils.models import IssueAnalysis, IssueType, Severity
 from utils.security import PromptInjectionDetector
 from utils.pr_analyzer import PRAnalyzer
+from utils.librarian import LibrarianAnalyzer
 
 # Initialize analyzer with default source path
 analyzer = GeminiIssueAnalyzer(api_key="your-api-key")
@@ -581,6 +637,22 @@ print(f"Issues Found: {len(review.issues_found)}")
 # Format review for display
 formatted_review = pr_analyzer.format_review_summary(review)
 print(formatted_review)
+
+# Use Two-Pass Architecture (Librarian + Surgeon)
+librarian = LibrarianAnalyzer(
+    api_key="your-api-key",
+    skeleton_path="repomix-output.txt"
+)
+
+# Pass 1: Identify relevant files
+relevant_files = librarian.identify_relevant_files(
+    title="Authentication Bug",
+    issue_description="Users cannot login after password reset"
+)
+print(f"Identified {len(relevant_files)} relevant files: {relevant_files}")
+
+# Pass 2: Use standard analyzer with targeted context
+# (create targeted repomix with only relevant_files, then use GeminiIssueAnalyzer)
 ```
 
 ## Source of Truth Configuration
@@ -927,7 +999,8 @@ AI-Issue-Triage/
 ├── utils/                      # 📦 Core Library Package
 │   ├── __init__.py            # Package exports
 │   ├── models.py              # Pydantic data models
-│   ├── analyzer.py            # Main issue analyzer
+│   ├── analyzer.py            # Main issue analyzer (Surgeon)
+│   ├── librarian.py           # ✅ File identification analyzer (Librarian - Pass 1)
 │   ├── pr_analyzer.py         # ✅ PR review analyzer
 │   ├── duplicate/             # Duplicate detection module
 │   │   ├── __init__.py
@@ -939,10 +1012,11 @@ AI-Issue-Triage/
 │
 ├── cli/                        # 🖥️ Command-Line Tools
 │   ├── __init__.py
-│   ├── analyze.py             # ✅ Main CLI (ai-triage)
+│   ├── analyze.py             # ✅ Main CLI (ai-triage / Surgeon)
 │   ├── duplicate_check.py     # ✅ Duplicate check CLI (ai-triage-duplicate)
 │   ├── cosine_check.py        # 🚧 Cosine check CLI (ai-triage-cosine, WIP)
-│   └── pr_review.py           # ✅ PR review CLI
+│   ├── pr_review.py           # ✅ PR review CLI
+│   └── librarian.py           # ✅ Librarian CLI (Pass 1 - file identification)
 │
 ├── ui/                         # 🎨 User Interface
 │   ├── __init__.py
@@ -964,7 +1038,9 @@ AI-Issue-Triage/
 │   │   ├── gemini-issue-analysis.yml           # ✅ Auto: Single issue
 │   │   ├── gemini-labeled-issue-analysis.yml   # ✅ Label: Single issue
 │   │   ├── ai-bulk-issue-analysis.yml          # ✅ Auto: Bulk issues
-│   │   └── ai-bulk-labeled-issue-analysis.yml  # ✅ Label: Bulk issues
+│   │   ├── ai-bulk-labeled-issue-analysis.yml  # ✅ Label: Bulk issues
+│   │   ├── ai-pr-review.yml                    # ✅ PR review (label-triggered)
+│   │   └── ai-lib-triage.yml                   # ✅ Two-Pass Architecture (Librarian+Surgeon)
 │   ├── triage.config.json     # Example configuration
 │   └── samples/               # Sample files for testing
 │
