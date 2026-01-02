@@ -46,56 +46,47 @@ jobs:
           git clone --depth 1 "$REPO_URL" repo-clone
           cd repo-clone
           
-          # Generate tree structure
-          echo "Generating directory tree..."
-          find . -type d -not -path '*/\.*' | sort > ../repo-tree.txt
+          # Check for .omit-triage file
+          OMIT_PATTERN=""
+          if [ -f .omit-triage ]; then
+            echo "Found .omit-triage file, reading exclusions..."
+            while IFS= read -r line; do
+              # Skip empty lines and comments
+              if [ -n "$line" ] && [[ ! "$line" =~ ^# ]]; then
+                echo "  Excluding: $line"
+                OMIT_PATTERN="$OMIT_PATTERN -not -path './$line' -not -path './$line/*'"
+              fi
+            done < .omit-triage
+          fi
           
-          echo "Directory tree generated:"
-          cat ../repo-tree.txt
+          # Get root-level directories only (excluding hidden dirs like .git)
+          echo "Getting root-level directories..."
+          find . -maxdepth 1 -type d -not -name '.' -not -name '..*' $OMIT_PATTERN | sort > ../root-dirs.txt
           
-          echo "Total directories: $(wc -l < ../repo-tree.txt)"
+          echo "Root directories found:"
+          cat ../root-dirs.txt
+          
+          echo "Total directories: $(wc -l < ../root-dirs.txt)"
 
       - name: Generate per-directory repomix files
         run: |
           echo "Generating compressed repomix files for each directory..."
           
           cd repo-clone
-          REPO_URL=$(jq -r '.repository.url' ../triage.config.json)
-          
           mkdir -p ../repomix-chunks
           
-          # Generate repomix for root directory files only (not subdirectories)
-          echo "Processing root directory..."
-          ROOT_FILES=$(find . -maxdepth 1 -type f -not -path '*/\.*' | tr '\n' ' ')
-          
-          if [ -n "$ROOT_FILES" ]; then
-            repomix \
-              --include $ROOT_FILES \
-              --style plain \
-              --compress \
-              --remove-comments \
-              --remove-empty-lines \
-              --no-file-summary \
-              --no-directory-structure \
-              --output ../repomix-chunks/root.txt 2>/dev/null || echo "Root files repomix skipped"
-          fi
-          
-          # Generate repomix for each subdirectory
+          # Process each root-level directory
           while IFS= read -r dir; do
-            if [ "$dir" = "." ]; then
+            if [ -z "$dir" ] || [ "$dir" = "." ]; then
               continue
             fi
             
-            # Clean directory name for filename (replace / with _)
+            # Clean directory name for filename (remove leading ./ and replace / with _)
             CLEAN_DIR=$(echo "$dir" | sed 's/^\.\///' | sed 's/\//_/g')
             
-            if [ -z "$CLEAN_DIR" ]; then
-              continue
-            fi
+            echo "Processing directory: $dir -> ${CLEAN_DIR}.txt"
             
-            echo "Processing directory: $dir -> $CLEAN_DIR"
-            
-            # Generate compressed repomix for this directory with all compression options
+            # Generate compressed repomix for this directory
             repomix \
               --include "$dir/**" \
               --style plain \
@@ -112,14 +103,42 @@ jobs:
             # Check size
             if [ -f "../repomix-chunks/${CLEAN_DIR}.txt" ]; then
               SIZE=$(wc -c < "../repomix-chunks/${CLEAN_DIR}.txt")
-              echo "  Generated: ${CLEAN_DIR}.txt (${SIZE} bytes)"
+              echo "  ✓ Generated: ${CLEAN_DIR}.txt (${SIZE} bytes)"
             fi
-          done < ../repo-tree.txt
+          done < ../root-dirs.txt
+          
+          # Process root-level files (not directories)
+          echo ""
+          echo "Processing root-level files..."
+          ROOT_FILES=$(find . -maxdepth 1 -type f -not -name '.*')
+          
+          if [ -n "$ROOT_FILES" ]; then
+            echo "Root files found:"
+            echo "$ROOT_FILES" | tr ' ' '\n'
+            
+            repomix \
+              $(echo "$ROOT_FILES" | xargs -I {} echo --include {}) \
+              --style plain \
+              --compress \
+              --remove-comments \
+              --remove-empty-lines \
+              --no-file-summary \
+              --no-directory-structure \
+              --output ../repomix-chunks/root.txt 2>/dev/null && {
+              SIZE=$(wc -c < ../repomix-chunks/root.txt)
+              echo "  ✓ Generated: root.txt (${SIZE} bytes)"
+            } || echo "  Skipped root files (empty or error)"
+          else
+            echo "  No root-level files found"
+          fi
           
           cd ..
+          echo ""
+          echo "========================================="
           echo "All directory chunks generated:"
           ls -lh repomix-chunks/
           echo "Total chunks: $(ls repomix-chunks/ | wc -l)"
+          echo "========================================="
 
       - name: Clone AI-Issue-Triage repository
         uses: actions/checkout@v4
@@ -636,7 +655,7 @@ jobs:
             prompt_injection_result.json
             existing_issues.json
             duplicate_result.json
-            repo-tree.txt
+            root-dirs.txt
             repomix-chunks/
             ai-triage/librarian_result.json
             targeted-repomix-output.txt
