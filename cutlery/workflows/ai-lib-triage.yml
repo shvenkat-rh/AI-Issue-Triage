@@ -254,24 +254,42 @@ jobs:
           
           echo "🔍 Checking for duplicate issues..."
           
-          python3 -m cli.duplicate_check \
+          # Run duplicate check with JSON output and proper error handling
+          if python3 -m cli.duplicate_check \
             --title "$ISSUE_TITLE" \
             --description "$ISSUE_DESCRIPTION" \
             --issues ../existing_issues.json \
-            > ../duplicate_result.json
-          
-          if [ -f ../duplicate_result.json ]; then
-            IS_DUPLICATE=$(jq -r '.is_duplicate' ../duplicate_result.json)
-            echo "is_duplicate=$IS_DUPLICATE" >> $GITHUB_OUTPUT
+            --output json \
+            > ../duplicate_result.json 2> ../duplicate_error.log; then
             
-            if [ "$IS_DUPLICATE" = "true" ]; then
-              DUPLICATE_OF=$(jq -r '.duplicate_of.issue_id' ../duplicate_result.json)
-              echo "duplicate_of=$DUPLICATE_OF" >> $GITHUB_OUTPUT
-              echo "⚠️ Duplicate detected: Issue #$DUPLICATE_OF"
+            # Success - parse the result
+            if [ -f ../duplicate_result.json ] && [ -s ../duplicate_result.json ]; then
+              # Validate JSON
+              if jq empty ../duplicate_result.json 2>/dev/null; then
+                IS_DUPLICATE=$(jq -r '.is_duplicate' ../duplicate_result.json)
+                echo "is_duplicate=$IS_DUPLICATE" >> $GITHUB_OUTPUT
+                
+                if [ "$IS_DUPLICATE" = "true" ]; then
+                  DUPLICATE_OF=$(jq -r '.duplicate_of.issue_id' ../duplicate_result.json)
+                  echo "duplicate_of=$DUPLICATE_OF" >> $GITHUB_OUTPUT
+                  echo "⚠️ Duplicate detected: Issue #$DUPLICATE_OF"
+                else
+                  echo "✅ Not a duplicate"
+                fi
+              else
+                echo "⚠️ Invalid JSON in duplicate result, treating as not duplicate"
+                echo "is_duplicate=false" >> $GITHUB_OUTPUT
+                cat ../duplicate_result.json
+              fi
             else
-              echo "✅ Not a duplicate"
+              echo "⚠️ Empty duplicate result, treating as not duplicate"
+              echo "is_duplicate=false" >> $GITHUB_OUTPUT
             fi
           else
+            # Command failed
+            echo "⚠️ Duplicate check failed, treating as not duplicate"
+            echo "Error log:"
+            cat ../duplicate_error.log || echo "No error log available"
             echo "is_duplicate=false" >> $GITHUB_OUTPUT
           fi
 
