@@ -127,8 +127,15 @@ class GeminiIssueAnalyzer:
     def _get_default_prompt(self, title: str, issue_description: str) -> str:
         """Get the default analysis prompt."""
         return f"""
-You are an expert software engineer analyzing a code issue for an Ansible Creator project. 
+You are an expert software engineer analyzing a code issue. 
 Your task is to perform comprehensive issue analysis based on the provided codebase.
+
+CRITICAL INSTRUCTIONS:
+1. You MUST use actual code from the CODEBASE CONTENT section below
+2. You MUST include actual code snippets in diff format in your solutions
+3. You MUST reference specific file paths, line numbers, and function names from the provided code
+4. DO NOT use generic placeholders like "path/to/file.py" - use actual paths from the codebase
+5. If the codebase is insufficient, state what specific files/code you need
 
 ISSUE DETAILS:
 Title: {title}
@@ -140,50 +147,59 @@ CODEBASE CONTENT:
 ANALYSIS REQUIREMENTS:
 1. **Issue Classification**: Determine if this is a 'bug', 'enhancement', or 'feature_request'
 2. **Severity Assessment**: Rate as 'low', 'medium', 'high', or 'critical'
-3. **Root Cause Analysis**: Identify the primary cause and contributing factors
-4. **Code Location Identification**: Find relevant files, functions, and classes
-5. **Solution Proposal**: Suggest specific code changes with rationale
+3. **Root Cause Analysis**: Identify the primary cause and contributing factors using actual code references
+4. **Code Location Identification**: Find relevant files, functions, and classes from the PROVIDED codebase
+5. **Solution Proposal**: Suggest specific code changes with actual code snippets in diff format
 
 RESPONSE FORMAT (JSON):
 {{
     "issue_type": "bug|enhancement|feature_request",
     "severity": "low|medium|high|critical",
     "root_cause_analysis": {{
-        "primary_cause": "Main reason for the issue",
-        "contributing_factors": ["factor1", "factor2"],
-        "affected_components": ["component1", "component2"],
+        "primary_cause": "Main reason based on actual code analysis",
+        "contributing_factors": ["factor1 with code reference", "factor2 with code reference"],
+        "affected_components": ["component1 (file:line)", "component2 (file:line)"],
         "related_code_locations": [
             {{
-                "file_path": "path/to/file.py",
+                "file_path": "actual/path/from/codebase.py",
                 "line_number": 123,
-                "function_name": "function_name",
-                "class_name": "ClassName"
+                "function_name": "actual_function_name",
+                "class_name": "ActualClassName"
             }}
         ]
     }},
     "proposed_solutions": [
         {{
-            "description": "Solution description",
-            "code_changes": "Specific code changes needed",
+            "description": "Solution description based on actual code structure",
+            "code_changes": "```diff\\n- old_code_line_from_codebase\\n+ new_code_line_with_fix\\n```",
             "location": {{
-                "file_path": "path/to/file.py",
+                "file_path": "actual/path/from/codebase.py",
                 "line_number": 123,
-                "function_name": "function_name",
-                "class_name": "ClassName"
+                "function_name": "actual_function_name",
+                "class_name": "ActualClassName"
             }},
-            "rationale": "Why this solution works"
+            "rationale": "Why this solution works based on the actual code patterns"
         }}
     ],
     "confidence_score": 0.85,
-    "analysis_summary": "Brief summary of the analysis"
+    "analysis_summary": "Brief summary referencing actual code elements"
 }}
 
 ANALYSIS GUIDELINES:
-- Focus on the Ansible Creator codebase structure (src/ansible_creator/)
-- Consider Python-specific patterns and best practices
+- Use ONLY information from the provided codebase
+- Include actual code snippets in diff format for all proposed solutions
+- Reference actual file paths, function names, and line numbers
+- Consider language-specific patterns and best practices
 - Look for patterns in existing code for consistency
-- Consider impact on CLI, configuration, templating, and utility modules
-- Provide actionable, specific solutions
+- Provide actionable, specific solutions with before/after code examples
+- If codebase is insufficient, explicitly state what additional context is needed
+
+VALIDATION CHECKLIST (Your response MUST satisfy ALL):
+✓ All file paths are from the actual provided codebase (not generic placeholders)
+✓ All code snippets are actual code from the codebase (not hypothetical examples)
+✓ All proposed solutions include diff-format code changes with real code
+✓ All line numbers and function names reference actual code locations
+✓ Code changes show both before (from codebase) and after (with fix)
 
 Please analyze the issue and provide your response in the exact JSON format specified above.
 """
@@ -195,14 +211,23 @@ Please analyze the issue and provide your response in the exact JSON format spec
             "requires further investigation" in analysis.root_cause_analysis.primary_cause.lower(),
             "to be determined" in analysis.root_cause_analysis.primary_cause.lower(),
             "based on initial analysis" in analysis.root_cause_analysis.primary_cause.lower(),
+            "limited" in analysis.root_cause_analysis.primary_cause.lower() and "codebase" in analysis.root_cause_analysis.primary_cause.lower(),
+            "extremely limited" in analysis.root_cause_analysis.primary_cause.lower(),
+            "no codebase" in analysis.root_cause_analysis.primary_cause.lower(),
             # Check for generic solution descriptions
             any("requires further investigation" in solution.description.lower() for solution in analysis.proposed_solutions),
             any("to be determined" in solution.code_changes.lower() for solution in analysis.proposed_solutions),
             any("based on initial analysis" in solution.rationale.lower() for solution in analysis.proposed_solutions),
+            any("without the actual codebase" in solution.description.lower() for solution in analysis.proposed_solutions),
             # Check for very low confidence
             analysis.confidence_score < 0.6,
-            # Check for generic file paths
-            any(solution.location.file_path == "src/ansible_creator/" for solution in analysis.proposed_solutions),
+            # Check for generic file paths (placeholders)
+            any("path/to/" in solution.location.file_path.lower() for solution in analysis.proposed_solutions),
+            any("/path/" in solution.location.file_path.lower() for solution in analysis.proposed_solutions),
+            any("file.py" == solution.location.file_path.lower() for solution in analysis.proposed_solutions),
+            any("example" in solution.location.file_path.lower() for solution in analysis.proposed_solutions),
+            # Check for missing diff format in code changes
+            any("```diff" not in solution.code_changes for solution in analysis.proposed_solutions if solution.code_changes),
             # Check for empty or very short analysis
             len(analysis.analysis_summary.strip()) < 50,
         ]

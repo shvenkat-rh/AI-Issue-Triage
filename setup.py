@@ -34,6 +34,7 @@ setup(
             "ai-triage=cli.analyze:main",
             "ai-triage-duplicate=cli.duplicate_check:main",
             "ai-triage-cosine=cli.cosine_check:main",
+            "ai-triage-pr=cli.pr_review:main",
         ],
     },
     include_package_data=True,

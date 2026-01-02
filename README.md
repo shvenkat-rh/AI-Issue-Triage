@@ -57,7 +57,7 @@ pip install -e .
 This will:
 - Install all dependencies
 - Make the `utils` package importable
-- Install CLI commands: `ai-triage`, `ai-triage-duplicate`, `ai-triage-cosine`
+- Install CLI commands: `ai-triage`, `ai-triage-duplicate`, `ai-triage-cosine`, `ai-triage-pr`
 
 **Alternative** (manual dependency installation):
 ```bash
@@ -397,6 +397,24 @@ python -m cli.cosine_check --title "..." --description "..." --issues issues.jso
 ### 4. Pull Request Review
 
 AI-powered pull request analysis and code review:
+
+**Using installed command** (after `pip install -e .`):
+```bash
+# Review a PR from JSON file
+ai-triage-pr --pr-file pr_data.json
+
+# Review with custom configuration
+ai-triage-pr --pr-file pr.json --config pr_prompt_config.yml
+
+# Review and save to file
+ai-triage-pr --pr-file pr.json --output review.md --format markdown
+
+# Review with repo URL for context-specific prompts
+ai-triage-pr --pr-file pr.json --repo-url "https://github.com/user/repo"
+
+# Review with inline data
+ai-triage-pr --title "Add feature" --body "Description" --files changes.json
+```
 
 **Using as a module**:
 ```bash
