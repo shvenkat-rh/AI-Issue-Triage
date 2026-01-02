@@ -46,6 +46,14 @@ jobs:
           git clone --depth 1 "$REPO_URL" repo-clone
           cd repo-clone
           
+          # Copy .omit-triage from workflow repo if it exists
+          if [ -f ../.omit-triage ]; then
+            echo "Copying .omit-triage from workflow repository..."
+            cp ../.omit-triage ./.omit-triage
+          elif [ -f .omit-triage ]; then
+            echo "Using .omit-triage from cloned repository..."
+          fi
+          
           # Get root-level directories only (excluding hidden dirs like .git)
           echo "Getting root-level directories..."
           find . -maxdepth 1 -type d -not -name '.' -not -name '..*' | sed 's|^\./||' | sort > ../all-dirs.txt
@@ -60,21 +68,27 @@ jobs:
             # Create filtered list by excluding directories from .omit-triage
             cp ../all-dirs.txt ../root-dirs.txt
             
+            # Convert .omit-triage to Unix format (remove Windows line endings)
+            dos2unix .omit-triage 2>/dev/null || sed -i 's/\r$//' .omit-triage 2>/dev/null || true
+            
             while IFS= read -r omit_dir; do
               # Skip empty lines and comments
               if [ -z "$omit_dir" ] || [[ "$omit_dir" =~ ^# ]]; then
                 continue
               fi
               
-              # Remove trailing slashes and whitespace
-              omit_dir=$(echo "$omit_dir" | sed 's|/$||' | xargs)
+              # Remove trailing slashes, whitespace, and any hidden characters
+              omit_dir=$(echo "$omit_dir" | tr -d '\r\n' | sed 's|/$||' | xargs)
               
               if [ -n "$omit_dir" ]; then
-                echo "  Excluding: $omit_dir"
+                echo "  Excluding directory: [$omit_dir]"
                 # Remove this directory from root-dirs.txt
-                grep -v "^${omit_dir}$" ../root-dirs.txt > ../root-dirs.tmp && mv ../root-dirs.tmp ../root-dirs.txt
+                grep -v "^${omit_dir}$" ../root-dirs.txt > ../root-dirs.tmp && mv ../root-dirs.tmp ../root-dirs.txt || echo "    Warning: grep failed for $omit_dir"
               fi
             done < .omit-triage
+            
+            echo ""
+            echo "Filtering complete."
           else
             echo "No .omit-triage file found, processing all directories"
             cp ../all-dirs.txt ../root-dirs.txt
