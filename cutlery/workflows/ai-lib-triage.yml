@@ -36,18 +36,24 @@ jobs:
           echo "Repomix installed successfully"
           repomix --version
 
-      - name: Generate repomix output for repository
+      - name: Generate repomix skeleton for Librarian
         run: |
           echo "Reading configuration from triage.config.json..."
           REPO_URL=$(jq -r '.repository.url' triage.config.json)
-          REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' triage.config.json)
-          echo "Repository URL: $REPO_URL"
-          echo "Repomix output path: $REPOMIX_OUTPUT"
           
-          echo "Running repomix on repository using remote..."
-          repomix --remote "$REPO_URL" --output "$REPOMIX_OUTPUT"
-          echo "Repomix output generated successfully"
-          ls -la "$REPOMIX_OUTPUT"
+          echo "Generating compressed skeleton for Librarian (Pass 1)..."
+          # Generate maximally compressed skeleton for file identification
+          repomix \
+            --remote "$REPO_URL" \
+            --style plain \
+            --compress \
+            --remove-comments \
+            --remove-empty-lines \
+            --output repomix-skeleton.txt
+          
+          echo "Skeleton generated successfully"
+          echo "Skeleton size: $(wc -c < repomix-skeleton.txt) bytes"
+          ls -lh repomix-skeleton.txt
 
       - name: Clone AI-Issue-Triage repository
         uses: actions/checkout@v4
@@ -277,13 +283,14 @@ jobs:
         run: |
           cd ai-triage
           
-          echo "📚 Pass 1: Librarian - Identifying relevant files..."
+          echo "📚 Pass 1: Librarian - Identifying relevant files from compressed skeleton..."
           
-          # Get repomix output path from config
-          REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' ../triage.config.json)
-          cp "../$REPOMIX_OUTPUT" ./repomix-output.txt
+          # Copy compressed skeleton for Librarian
+          cp ../repomix-skeleton.txt ./repomix-output.txt
           
-          # Run Librarian
+          echo "Skeleton size for Librarian: $(wc -c < repomix-output.txt) bytes"
+          
+          # Run Librarian with compressed skeleton
           python -m cli.librarian \
             --title "${{ github.event.issue.title }}" \
             --description "${{ github.event.issue.body }}" \
@@ -293,7 +300,7 @@ jobs:
           
           if [ -f librarian_result.json ]; then
             echo "librarian_success=true" >> $GITHUB_OUTPUT
-            echo "✅ Librarian identified relevant files"
+            echo "✅ Librarian identified relevant files from skeleton"
             cat librarian_result.json
           else
             echo "librarian_success=false" >> $GITHUB_OUTPUT
@@ -304,7 +311,7 @@ jobs:
         id: targeted_repomix
         if: steps.librarian.outputs.librarian_success == 'true'
         run: |
-          echo "📦 Creating targeted repomix with identified files..."
+          echo "📦 Creating targeted repomix with FULL CONTENT for identified files..."
           
           # Extract file list from librarian result
           FILE_LIST=$(jq -r '.relevant_files[]' ai-triage/librarian_result.json | tr '\n' ' ')
@@ -315,21 +322,30 @@ jobs:
             exit 0
           fi
           
-          echo "Files to include: $FILE_LIST"
+          echo "Files identified by Librarian:"
+          jq -r '.relevant_files[]' ai-triage/librarian_result.json | nl
           
           # Get config values
           REPO_URL=$(jq -r '.repository.url' triage.config.json)
           
-          # Generate targeted repomix with only identified files
-          repomix --remote "$REPO_URL" --include $FILE_LIST --output targeted-repomix-output.txt || {
-            echo "⚠️ Targeted repomix failed, falling back to full repomix"
-            REPOMIX_OUTPUT=$(jq -r '.repomix.output_path' triage.config.json)
-            cp "$REPOMIX_OUTPUT" targeted-repomix-output.txt
+          # Generate targeted repomix with FULL CONTENT (no compression)
+          # This is for Surgeon to do deep analysis
+          echo "Generating full content for Surgeon analysis..."
+          repomix \
+            --remote "$REPO_URL" \
+            --include $FILE_LIST \
+            --style plain \
+            --output targeted-repomix-output.txt || {
+            echo "⚠️ Targeted repomix with --include failed, trying alternative approach..."
+            # Fallback: generate full repo but we'll filter later
+            repomix --remote "$REPO_URL" --style plain --output targeted-repomix-output.txt
           }
           
           if [ -f targeted-repomix-output.txt ]; then
             echo "✅ Targeted repomix created successfully"
-            echo "Size: $(wc -c < targeted-repomix-output.txt) bytes"
+            echo "Size comparison:"
+            echo "  Skeleton (compressed): $(wc -c < repomix-skeleton.txt) bytes"
+            echo "  Targeted (full content): $(wc -c < targeted-repomix-output.txt) bytes"
             echo "targeted_success=true" >> $GITHUB_OUTPUT
           else
             echo "❌ Failed to create targeted repomix"
@@ -525,6 +541,7 @@ jobs:
             existing_issues.json
             duplicate_result.json
             ai-triage/librarian_result.json
+            repomix-skeleton.txt
             targeted-repomix-output.txt
             analysis_result.txt
             analysis_result.json
