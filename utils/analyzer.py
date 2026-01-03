@@ -261,14 +261,16 @@ Please analyze the issue and provide your response in the exact JSON format spec
             any("example" in solution.location.file_path.lower() for solution in analysis.proposed_solutions),
             # Check for missing diff format in code changes (but allow test-only solutions)
             any(
-                "```diff" not in solution.code_changes and 
-                "test" not in solution.description.lower() and
-                len(solution.code_changes) > 10
+                "```diff" not in solution.code_changes
+                and "test" not in solution.description.lower()
+                and len(solution.code_changes) > 10
                 for solution in analysis.proposed_solutions
             ),
             # Check for solutions that are just test cases (need implementation too)
-            all("test" in solution.description.lower() or "test" in solution.location.file_path.lower() 
-                for solution in analysis.proposed_solutions),
+            all(
+                "test" in solution.description.lower() or "test" in solution.location.file_path.lower()
+                for solution in analysis.proposed_solutions
+            ),
             # Check for empty or very short analysis
             len(analysis.analysis_summary.strip()) < 50,
         ]
