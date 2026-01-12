@@ -234,17 +234,47 @@ Please analyze the issue and provide your response in the exact JSON format spec
 
     def _parse_gemini_response(self, response_text: str) -> Dict[str, Any]:
         """Parse Gemini's response and extract analysis data."""
+        # Strategy 1: Try to find JSON in code blocks first
+        json_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response_text, re.DOTALL)
+        if json_block_match:
+            try:
+                return json.loads(json_block_match.group(1))
+            except json.JSONDecodeError:
+                pass  # Try next strategy
+        
+        # Strategy 2: Try to find a JSON object by counting braces
         try:
-            # Try to extract JSON from the response
+            start_idx = response_text.find('{')
+            if start_idx != -1:
+                brace_count = 0
+                end_idx = start_idx
+                for i in range(start_idx, len(response_text)):
+                    if response_text[i] == '{':
+                        brace_count += 1
+                    elif response_text[i] == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            end_idx = i + 1
+                            break
+                
+                if end_idx > start_idx:
+                    json_str = response_text[start_idx:end_idx]
+                    return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass  # Try next strategy
+        
+        # Strategy 3: Try greedy regex as last resort
+        try:
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
             if json_match:
-                json_str = json_match.group(0)
-                return json.loads(json_str)
-            else:
-                # If no JSON found, create a structured response from text
-                return self._extract_from_text(response_text)
+                return json.loads(json_match.group(0))
         except json.JSONDecodeError:
-            return self._extract_from_text(response_text)
+            pass
+        
+        # All strategies failed, fall back to text extraction
+        print("Warning: Could not parse JSON from Gemini response, using fallback text extraction")
+        print(f"Response preview: {response_text[:500]}...")
+        return self._extract_from_text(response_text)
 
     def _extract_from_text(self, text: str) -> Dict[str, Any]:
         """Extract analysis data from plain text response."""
@@ -263,30 +293,65 @@ Please analyze the issue and provide your response in the exact JSON format spec
         elif any(word in text.lower() for word in ["low", "minor"]):
             severity = "low"
 
-        return {
-            "issue_type": issue_type,
-            "severity": severity,
-            "root_cause_analysis": {
-                "primary_cause": "Analysis based on codebase review",
-                "contributing_factors": ["Requires detailed code inspection"],
-                "affected_components": ["To be determined"],
-                "related_code_locations": [],
-            },
-            "proposed_solutions": [
-                {
-                    "description": "Requires further investigation",
-                    "code_changes": "To be determined after detailed analysis",
+        # Try to extract meaningful content from the text
+        primary_cause = "Unable to parse structured analysis from response"
+        contributing_factors = []
+        affected_components = []
+        solutions = []
+        
+        # Try to extract sections by looking for common patterns
+        cause_match = re.search(r"(?:primary[_\s]cause|root[_\s]cause)[:\s]*(.+?)(?:\n\n|\n[A-Z]|$)", text, re.IGNORECASE | re.DOTALL)
+        if cause_match:
+            primary_cause = cause_match.group(1).strip()[:500]
+        
+        # Extract solutions if present
+        solution_pattern = r"(?:solution|fix|approach)[:\s]*(.+?)(?=(?:solution|fix|approach)[:\s]|\Z)"
+        solution_matches = re.finditer(solution_pattern, text, re.IGNORECASE | re.DOTALL)
+        for match in solution_matches:
+            solution_text = match.group(1).strip()
+            if solution_text and len(solution_text) > 20:
+                # Extract code changes if present
+                code_match = re.search(r"```.*?```", solution_text, re.DOTALL)
+                code_changes = code_match.group(0) if code_match else solution_text[:300]
+                
+                solutions.append({
+                    "description": solution_text[:200].split('\n')[0],  # First line as description
+                    "code_changes": code_changes,
                     "location": {
-                        "file_path": "src/ansible_creator/",
+                        "file_path": "See analysis text",
                         "line_number": None,
                         "function_name": None,
                         "class_name": None,
                     },
-                    "rationale": "Based on initial analysis",
-                }
-            ],
+                    "rationale": "Extracted from unstructured response",
+                })
+        
+        # If no solutions found, create one with the full text
+        if not solutions:
+            solutions = [{
+                "description": "Please review the full analysis text below",
+                "code_changes": text[:1000] if len(text) > 1000 else text,
+                "location": {
+                    "file_path": "See analysis text",
+                    "line_number": None,
+                    "function_name": None,
+                    "class_name": None,
+                },
+                "rationale": "Full response text provided due to parsing failure",
+            }]
+
+        return {
+            "issue_type": issue_type,
+            "severity": severity,
+            "root_cause_analysis": {
+                "primary_cause": primary_cause,
+                "contributing_factors": contributing_factors or ["See analysis text for details"],
+                "affected_components": affected_components or ["See analysis text for details"],
+                "related_code_locations": [],
+            },
+            "proposed_solutions": solutions,
             "confidence_score": 0.5,
-            "analysis_summary": text[:500] + "..." if len(text) > 500 else text,
+            "analysis_summary": f"Note: Response could not be parsed as structured JSON. Raw analysis text:\n\n{text[:500]}{'...' if len(text) > 500 else ''}",
         }
 
     def _create_fallback_analysis(self, title: str, description: str, error_msg: str) -> IssueAnalysis:
