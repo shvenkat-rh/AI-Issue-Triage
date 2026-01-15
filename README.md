@@ -25,6 +25,7 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 ## Features
 
 - **AI-Powered Analysis**: Uses Google Gemini 2.0 Flash for intelligent issue analysis with the latest [Google Gen AI SDK](https://googleapis.github.io/python-genai/)
+- **Two-Pass Architecture**: Librarian identifies relevant files, Surgeon performs deep analysis on targeted context
 - **Root Cause Analysis**: Identifies primary causes and contributing factors
 - **Solution Generation**: Proposes specific code changes with rationale
 - **Issue Triage**: Automatically classifies issues as bugs, enhancements, or feature requests
@@ -36,6 +37,7 @@ An AI-powered issue analysis tool that uses Google's Gemini AI to perform compre
 - **Security Protection**: Built-in prompt injection detection to protect against malicious inputs
 - **Duplicate Detection**: Automatically identifies and flags duplicate issues
 - **GitHub Actions Integration**: Multiple workflow options including label-based filtering for selective analysis
+- **PR Review & Analysis**: AI-powered pull request review with code quality feedback and suggestions
 
 ## Setup
 
@@ -55,7 +57,7 @@ pip install -e .
 This will:
 - Install all dependencies
 - Make the `utils` package importable
-- Install CLI commands: `ai-triage`, `ai-triage-duplicate`, `ai-triage-cosine`
+- Install CLI commands: `ai-triage`, `ai-triage-duplicate`, `ai-triage-cosine`, `ai-triage-pr`
 
 **Alternative** (manual dependency installation):
 ```bash
@@ -392,6 +394,101 @@ python -m cli.cosine_check --title "..." --description "..." --issues issues.jso
 
 ---
 
+### 4. Pull Request Review
+
+AI-powered pull request analysis and code review:
+
+**Using installed command** (after `pip install -e .`):
+```bash
+# Review a PR from JSON file
+ai-triage-pr --pr-file pr_data.json
+
+# Review with custom configuration
+ai-triage-pr --pr-file pr.json --config pr_prompt_config.yml
+
+# Review and save to file
+ai-triage-pr --pr-file pr.json --output review.md --format markdown
+
+# Review with repo URL for context-specific prompts
+ai-triage-pr --pr-file pr.json --repo-url "https://github.com/user/repo"
+
+# Review with inline data
+ai-triage-pr --title "Add feature" --body "Description" --files changes.json
+```
+
+**Using as a module**:
+```bash
+# Review a PR from JSON file
+python -m cli.pr_review --pr-file pr_data.json
+
+# Review with custom configuration
+python -m cli.pr_review --pr-file pr.json --config pr_prompt_config.yml
+
+# Review and save to file
+python -m cli.pr_review --pr-file pr.json --output review.json --format markdown
+
+# Review with repo URL for context-specific prompts
+python -m cli.pr_review --pr-file pr.json --repo-url "https://github.com/user/repo"
+
+# Review with inline data
+python -m cli.pr_review --title "Add feature" --body "Description" --files changes.json
+```
+
+**PR JSON file format**:
+```json
+{
+  "title": "PR title",
+  "body": "PR description",
+  "repo_url": "https://github.com/user/repo",
+  "file_changes": [
+    {
+      "filename": "path/to/file.py",
+      "status": "modified",
+      "additions": 10,
+      "deletions": 5,
+      "patch": "@@ -1,5 +1,10 @@\n..."
+    }
+  ]
+}
+```
+
+**Features**:
+- Comprehensive code review with AI
+- File-specific comments with line numbers
+- Identifies strengths, issues, and suggestions
+- Configurable prompts for different repo types (Python, AI/ML, etc.)
+- Workflow analysis for GitHub Actions
+- Markdown and JSON output formats
+
+**Prompt Configuration**:
+
+The PR analyzer uses a YAML configuration file (`pr_prompt_config.yml`) to customize review behavior based on repository type:
+
+```yaml
+# Repository URL patterns
+repo_mappings:
+  python:
+    - 'github.com/.*/.*-python.*'
+  ai_ml:
+    - 'github.com/.*/.*AI.*'
+
+# Custom prompts per repo type
+prompts:
+  python:
+    pr_review:
+      system_role: 'Python expert code reviewer...'
+      review_structure: |
+        Focus on:
+        - PEP 8 compliance
+        - Type hints
+        - Docstrings
+        ...
+```
+
+**Status**: ✅ Stable and ready for use
+
+---
+
 ### 3. Prompt Injection Detection
 
 Security tool to detect malicious prompt injection attempts:
@@ -420,6 +517,81 @@ print(f"Risk Level: {result.risk_level}")
 
 ---
 
+### 5. Two-Pass Architecture (Librarian + Surgeon)
+
+For complex issues requiring full code context, use the Two-Pass Architecture that intelligently breaks down the codebase into directory chunks and identifies relevant files before deep analysis:
+
+**How It Works:**
+
+1. **Directory Chunking**: Repository is cloned and divided into per-directory compressed repomix files
+2. **Pass 1 - Librarian**: Analyzes each directory chunk to identify relevant files (with dependency tracking)
+3. **Pass 2 - Surgeon**: Creates targeted repomix with only identified files for deep analysis
+
+**Pass 1 - Librarian (File Identification)**:
+```bash
+# Librarian analyzes directory chunks to identify relevant files
+python -m cli.librarian \
+  --title "Bug in authentication flow" \
+  --description "Users cannot login after password reset" \
+  --chunks-dir repomix-chunks \
+  --output relevant_files.json
+```
+
+**Pass 2 - Surgeon (Deep Analysis)** - Use existing analyzer with targeted files:
+```bash
+# Surgeon pass uses the standard analyzer with targeted repomix
+# (see GitHub Actions workflow for automated integration)
+```
+
+**Benefits:**
+- **Scalable**: Works with repos of any size by breaking into chunks
+- **Token Efficient**: Avoids 1M+ token limits by analyzing directories separately
+- **Smart Dependencies**: If file A imports file B, both are included
+- **Precise Context**: Surgeon gets only relevant files, not entire codebase
+
+**Automated Workflow:**
+The `ai-lib-triage.yml` workflow automatically handles:
+- Repository cloning and directory tree generation
+- Per-directory repomix generation with compression
+- Librarian analysis across all chunks
+- Targeted repomix creation with identified files
+- Surgeon analysis with full context of relevant files
+- All security, duplicate detection, and labeling features
+
+**How It Works**:
+1. **Librarian** analyzes compressed codebase skeleton
+2. AI identifies ALL relevant files (no arbitrary limits)
+3. Includes dependency chains (if file A imports B, both included)
+4. Creates **targeted repomix** with only identified files
+5. **Surgeon** performs deep analysis with focused context
+6. Results in more accurate analysis with lower token usage
+
+**Features**:
+- AI determines relevant file count (no manual limits)
+- Automatic dependency inclusion
+- Targeted codebase generation
+- Integrates with existing analyzer (Surgeon)
+- GitHub Actions workflow available (`ai-lib-triage.yml`)
+
+**GitHub Workflow**:
+The `ai-lib-triage.yml` workflow provides:
+- Label-triggered ("AI_Triage" or bypass label)
+- Security checks with prompt injection detection
+- Duplicate detection
+- Two-pass analysis (Librarian → Targeted Repomix → Surgeon)
+- Auto-labeling based on results
+- Comprehensive comments with file lists
+
+**When to Use**:
+- ✅ Subtle bugs requiring full code context
+- ✅ Complex issues spanning multiple files
+- ✅ Issues where file location is unclear
+- ✅ Large codebases where full context exceeds token limits
+
+**Status**: ✅ Stable and ready for use
+
+---
+
 ### Programmatic Usage (Python Library)
 
 You can also use the analyzer programmatically:
@@ -433,6 +605,8 @@ from utils.analyzer import GeminiIssueAnalyzer
 from utils.duplicate import CosineDuplicateAnalyzer, GeminiDuplicateAnalyzer
 from utils.models import IssueAnalysis, IssueType, Severity
 from utils.security import PromptInjectionDetector
+from utils.pr_analyzer import PRAnalyzer
+from utils.librarian import LibrarianAnalyzer
 
 # Initialize analyzer with default source path
 analyzer = GeminiIssueAnalyzer(api_key="your-api-key")
@@ -476,6 +650,49 @@ result = duplicate_analyzer.detect_duplicate(
 security = PromptInjectionDetector()
 check = security.detect("User input text")
 print(f"Risk: {check.risk_level}")
+
+# Use PR analyzer
+pr_analyzer = PRAnalyzer(
+    api_key="your-api-key",
+    model_name="gemini-2.0-flash-001"  # Optional
+)
+review = pr_analyzer.review_pr(
+    title="Add new feature",
+    body="Description of changes",
+    file_changes=[
+        {
+            "filename": "src/feature.py",
+            "status": "modified",
+            "additions": 10,
+            "deletions": 5,
+            "patch": "@@ -1,5 +1,10 @@\n..."
+        }
+    ],
+    repo_url="https://github.com/user/repo"
+)
+print(f"Overall Assessment: {review.overall_assessment}")
+print(f"Issues Found: {len(review.issues_found)}")
+
+# Format review for display
+formatted_review = pr_analyzer.format_review_summary(review)
+print(formatted_review)
+
+# Use Two-Pass Architecture (Librarian + Surgeon)
+librarian = LibrarianAnalyzer(
+    api_key="your-api-key",
+    chunks_dir="repomix-chunks"
+)
+
+# Pass 1: Identify relevant files from directory chunks
+result = librarian.identify_relevant_files(
+    title="Authentication Bug",
+    issue_description="Users cannot login after password reset"
+)
+print(f"Analysis: {result['analysis_summary']}")
+print(f"Identified {len(result['relevant_files'])} relevant files")
+
+# Pass 2: Use standard analyzer with targeted context
+# (create targeted repomix with only relevant_files, then use GeminiIssueAnalyzer)
 ```
 
 ## Source of Truth Configuration
@@ -822,7 +1039,9 @@ AI-Issue-Triage/
 ├── utils/                      # 📦 Core Library Package
 │   ├── __init__.py            # Package exports
 │   ├── models.py              # Pydantic data models
-│   ├── analyzer.py            # Main issue analyzer
+│   ├── analyzer.py            # Main issue analyzer (Surgeon)
+│   ├── librarian.py           # ✅ File identification analyzer (Librarian - Pass 1)
+│   ├── pr_analyzer.py         # ✅ PR review analyzer
 │   ├── duplicate/             # Duplicate detection module
 │   │   ├── __init__.py
 │   │   ├── gemini_duplicate.py    # ✅ AI-powered duplicate detection
@@ -833,9 +1052,11 @@ AI-Issue-Triage/
 │
 ├── cli/                        # 🖥️ Command-Line Tools
 │   ├── __init__.py
-│   ├── analyze.py             # ✅ Main CLI (ai-triage)
+│   ├── analyze.py             # ✅ Main CLI (ai-triage / Surgeon)
 │   ├── duplicate_check.py     # ✅ Duplicate check CLI (ai-triage-duplicate)
-│   └── cosine_check.py        # 🚧 Cosine check CLI (ai-triage-cosine, WIP)
+│   ├── cosine_check.py        # 🚧 Cosine check CLI (ai-triage-cosine, WIP)
+│   ├── pr_review.py           # ✅ PR review CLI
+│   └── librarian.py           # ✅ Librarian CLI (Pass 1 - file identification)
 │
 ├── ui/                         # 🎨 User Interface
 │   ├── __init__.py
@@ -848,7 +1069,8 @@ AI-Issue-Triage/
 │   ├── test_models.py         # Data models tests
 │   ├── test_gemini_analyzer.py        # Analyzer tests
 │   ├── test_duplicate_analyzer.py     # Duplicate detection tests
-│   └── test_cosine_duplicate_analyzer.py  # Cosine similarity tests
+│   ├── test_cosine_duplicate_analyzer.py  # Cosine similarity tests
+│   └── test_pr_analyzer.py    # ✅ PR analyzer tests
 │
 ├── cutlery/                    # 🚀 Quick Start Resources
 │   ├── QUICKSTART.md          # Complete setup guide
@@ -856,7 +1078,9 @@ AI-Issue-Triage/
 │   │   ├── gemini-issue-analysis.yml           # ✅ Auto: Single issue
 │   │   ├── gemini-labeled-issue-analysis.yml   # ✅ Label: Single issue
 │   │   ├── ai-bulk-issue-analysis.yml          # ✅ Auto: Bulk issues
-│   │   └── ai-bulk-labeled-issue-analysis.yml  # ✅ Label: Bulk issues
+│   │   ├── ai-bulk-labeled-issue-analysis.yml  # ✅ Label: Bulk issues
+│   │   ├── ai-pr-review.yml                    # ✅ PR review (label-triggered)
+│   │   └── ai-lib-triage.yml                   # ✅ Two-Pass Architecture (Librarian+Surgeon)
 │   ├── triage.config.json     # Example configuration
 │   └── samples/               # Sample files for testing
 │
@@ -866,6 +1090,7 @@ AI-Issue-Triage/
 │   ├── pytest.ini             # Pytest configuration
 │   ├── pyproject.toml         # Black, isort configuration
 │   ├── .flake8                # Flake8 linting configuration
+│   ├── pr_prompt_config.yml   # ✅ PR review prompt configuration
 │   └── env_example.txt        # Environment variables template
 │
 └── Documentation & Samples

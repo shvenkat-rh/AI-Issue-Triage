@@ -1,0 +1,863 @@
+name: AI Librarian Issue Triage (Two-Pass Architecture)
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  librarian-triage:
+    # Run if the issue has "AI_Triage" OR "AI_Triage : Bypass Prompt Injection Check"
+    if: >
+      contains(github.event.issue.labels.*.name, 'AI_Triage') ||
+      contains(github.event.issue.labels.*.name, 'AI_Triage : Bypass Prompt Injection Check')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js for repomix
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Setup Python for AI analysis
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install repomix
+        run: |
+          npm install -g repomix
+          echo "Repomix installed successfully"
+          repomix --version
+
+      - name: Clone repository and generate directory structure
+        run: |
+          echo "Reading configuration from triage.config.json..."
+          REPO_URL=$(jq -r '.repository.url' triage.config.json)
+          
+          # Clone the repository
+          echo "Cloning repository: $REPO_URL"
+          git clone --depth 1 "$REPO_URL" repo-clone
+          cd repo-clone
+          
+          # Copy .omit-triage from workflow repo if it exists
+          if [ -f ../.omit-triage ]; then
+            echo "Copying .omit-triage from workflow repository..."
+            cp ../.omit-triage ./.omit-triage
+          elif [ -f .omit-triage ]; then
+            echo "Using .omit-triage from cloned repository..."
+          fi
+          
+          # Get root-level directories only (excluding hidden dirs like .git)
+          echo "Getting root-level directories..."
+          find . -maxdepth 1 -type d -not -name '.' -not -name '..*' | sed 's|^\./||' | sort > ../all-dirs.txt
+          
+          # Check for .omit-triage file and filter
+          if [ -f .omit-triage ]; then
+            echo "Found .omit-triage file, applying exclusions..."
+            echo "Contents of .omit-triage:"
+            cat .omit-triage
+            echo ""
+            
+            # Create filtered list by excluding directories from .omit-triage
+            cp ../all-dirs.txt ../root-dirs.txt
+            
+            # Convert .omit-triage to Unix format (remove Windows line endings)
+            dos2unix .omit-triage 2>/dev/null || sed -i 's/\r$//' .omit-triage 2>/dev/null || true
+            
+            while IFS= read -r omit_dir; do
+              # Skip empty lines and comments
+              if [ -z "$omit_dir" ] || [[ "$omit_dir" =~ ^# ]]; then
+                continue
+              fi
+              
+              # Remove trailing slashes, whitespace, and any hidden characters
+              omit_dir=$(echo "$omit_dir" | tr -d '\r\n' | sed 's|/$||' | xargs)
+              
+              if [ -n "$omit_dir" ]; then
+                echo "  Excluding directory: [$omit_dir]"
+                # Remove this directory from root-dirs.txt
+                grep -v "^${omit_dir}$" ../root-dirs.txt > ../root-dirs.tmp && mv ../root-dirs.tmp ../root-dirs.txt || echo "    Warning: grep failed for $omit_dir"
+              fi
+            done < .omit-triage
+            
+            echo ""
+            echo "Filtering complete."
+          else
+            echo "No .omit-triage file found, processing all directories"
+            cp ../all-dirs.txt ../root-dirs.txt
+          fi
+          
+          echo ""
+          echo "Root directories to process:"
+          cat ../root-dirs.txt
+          
+          echo ""
+          echo "Total directories: $(wc -l < ../root-dirs.txt)"
+
+      - name: Generate per-directory repomix files
+        run: |
+          echo "Generating compressed repomix files for each directory..."
+          
+          cd repo-clone
+          mkdir -p ../repomix-chunks
+          
+          # Process each root-level directory
+          while IFS= read -r dir; do
+            if [ -z "$dir" ]; then
+              continue
+            fi
+            
+            # Clean directory name for filename (replace / with _)
+            CLEAN_DIR=$(echo "$dir" | sed 's/\//_/g')
+            
+            echo "Processing directory: $dir -> ${CLEAN_DIR}.txt"
+            
+            # Generate compressed repomix for this directory
+            repomix \
+              --include "./$dir/**" \
+              --style plain \
+              --compress \
+              --remove-comments \
+              --remove-empty-lines \
+              --no-file-summary \
+              --no-directory-structure \
+              --output "../repomix-chunks/${CLEAN_DIR}.txt" 2>/dev/null || {
+              echo "  Skipped (empty or error)"
+              continue
+            }
+            
+            # Check size
+            if [ -f "../repomix-chunks/${CLEAN_DIR}.txt" ]; then
+              SIZE=$(wc -c < "../repomix-chunks/${CLEAN_DIR}.txt")
+              echo "  ✓ Generated: ${CLEAN_DIR}.txt (${SIZE} bytes)"
+            fi
+          done < ../root-dirs.txt
+          
+          # Process root-level files (not directories)
+          echo ""
+          echo "Processing root-level files..."
+          ROOT_FILES=$(find . -maxdepth 1 -type f -not -name '.*')
+          
+          if [ -n "$ROOT_FILES" ]; then
+            echo "Root files found:"
+            echo "$ROOT_FILES" | tr ' ' '\n'
+            
+            repomix \
+              $(echo "$ROOT_FILES" | xargs -I {} echo --include {}) \
+              --style plain \
+              --compress \
+              --remove-comments \
+              --remove-empty-lines \
+              --no-file-summary \
+              --no-directory-structure \
+              --output ../repomix-chunks/root.txt 2>/dev/null && {
+              SIZE=$(wc -c < ../repomix-chunks/root.txt)
+              echo "  ✓ Generated: root.txt (${SIZE} bytes)"
+            } || echo "  Skipped root files (empty or error)"
+          else
+            echo "  No root-level files found"
+          fi
+          
+          cd ..
+          echo ""
+          echo "========================================="
+          echo "All directory chunks generated:"
+          ls -lh repomix-chunks/
+          echo "Total chunks: $(ls repomix-chunks/ | wc -l)"
+          echo "========================================="
+
+      - name: Clone AI-Issue-Triage repository
+        uses: actions/checkout@v4
+        with:
+          repository: shvenkat-rh/AI-Issue-Triage
+          ref: main
+          path: ai-triage
+          fetch-depth: 1
+
+      - name: Install Python dependencies for AI triage
+        run: |
+          cd ai-triage
+          
+          echo "Installing Python dependencies..."
+          if pip install -r requirements.txt; then
+            echo "Python dependencies installed successfully"
+          else
+            echo "ERROR: Failed to install Python dependencies"
+            echo "Requirements file contents:"
+            cat requirements.txt
+            exit 1
+          fi
+          
+          # Verify critical packages are installed
+          python3 -c "import pytector; print('✓ pytector installed')" || echo "⚠️ pytector not available"
+          python3 -c "import google.genai; print('✓ google-genai installed')" || echo "⚠️ google-genai not available"
+
+      - name: Check for prompt injection
+        id: prompt-injection
+        if: "!contains(github.event.issue.labels.*.name, 'AI_Triage : Bypass Prompt Injection Check')"
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_DESCRIPTION: ${{ github.event.issue.body }}
+        run: |
+          cd ai-triage
+          
+          echo "🔒 Checking for prompt injection..."
+          
+          # Use the prompt injection detection
+          if [ -f "utils/security/prompt_injection.py" ]; then
+            python3 -m utils.security.prompt_injection "$ISSUE_TITLE" "$ISSUE_DESCRIPTION" > ../prompt_injection_result.json
+            
+            # Extract results
+            HAS_INJECTION=$(jq -r '.is_injection' ../prompt_injection_result.json)
+            RISK_LEVEL=$(jq -r '.risk_level' ../prompt_injection_result.json)
+            CONFIDENCE=$(jq -r '.confidence_score' ../prompt_injection_result.json)
+            
+            echo "has_prompt_injection=$HAS_INJECTION" >> $GITHUB_OUTPUT
+            echo "risk_level=$RISK_LEVEL" >> $GITHUB_OUTPUT
+            echo "confidence=$CONFIDENCE" >> $GITHUB_OUTPUT
+            
+            echo "✅ Prompt injection check completed"
+            echo "Result: Injection=$HAS_INJECTION, Risk=$RISK_LEVEL, Confidence=$CONFIDENCE"
+          else
+            echo "⚠️ Prompt injection detection not available"
+            echo "has_prompt_injection=false" >> $GITHUB_OUTPUT
+            echo "risk_level=safe" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post prompt injection warning
+        if: steps.prompt-injection.outputs.has_prompt_injection == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const riskLevel = '${{ steps.prompt-injection.outputs.risk_level }}';
+            const confidence = '${{ steps.prompt-injection.outputs.confidence }}';
+            
+            let injectionData;
+            try {
+              injectionData = JSON.parse(fs.readFileSync('prompt_injection_result.json', 'utf8'));
+            } catch (error) {
+              console.error('Error reading prompt injection result:', error);
+              injectionData = {
+                detected_patterns: [],
+                details: 'Unable to load detailed results'
+              };
+            }
+            
+            const riskEmoji = {
+              'low': '🟡',
+              'medium': '🟠',
+              'high': '🔴',
+              'critical': '🚨'
+            };
+            
+            const patterns = injectionData.detected_patterns || [];
+            const patternsList = patterns.length > 0 
+              ? patterns.map(p => `- ${p}`).join('\n')
+              : '- None specified';
+            
+            let comment = `## ${riskEmoji[riskLevel] || '⚠️'} Security Alert: Potential Prompt Injection Detected\n\n`;
+            comment += `**Risk Level**: ${riskLevel.toUpperCase()}\n`;
+            comment += `**Confidence**: ${(parseFloat(confidence) * 100).toFixed(1)}%\n\n`;
+            comment += `### Detected Patterns\n${patternsList}\n\n`;
+            
+            if (riskLevel === 'low' || riskLevel === 'medium') {
+              comment += `### ✅ Analysis Will Proceed\n\n`;
+              comment += `This issue has been flagged with ${riskLevel} risk, but analysis will continue.\n`;
+              comment += `The AI system has additional safeguards to handle suspicious content.\n\n`;
+            } else {
+              comment += `### 🛑 Analysis Blocked\n\n`;
+              comment += `Due to ${riskLevel.toUpperCase()} risk level, automated AI analysis has been disabled for this issue.\n`;
+              comment += `A human reviewer should examine this issue manually.\n\n`;
+            }
+            
+            comment += `### What This Means\n\n`;
+            comment += `Prompt injection attacks attempt to manipulate AI systems by including malicious instructions in user input. `;
+            comment += `Our security system detected patterns that match known injection techniques.\n\n`;
+            comment += `**If this is a false positive**, you can:\n`;
+            comment += `1. Rephrase your issue description to avoid trigger patterns\n`;
+            comment += `2. Contact a maintainer to add the \`AI_Triage : Bypass Prompt Injection Check\` label\n\n`;
+            comment += `---\n`;
+            comment += `*This is an automated security check to protect the AI analysis system.*`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+            
+            // Add security labels
+            const labelsToAdd = ['security-alert'];
+            if (riskLevel === 'high' || riskLevel === 'critical') {
+              labelsToAdd.push('prompt-injection-detected');
+            }
+            
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: labelsToAdd
+            });
+
+      - name: End workflow for high-risk prompt injection
+        if: steps.prompt-injection.outputs.has_prompt_injection == 'true' && (steps.prompt-injection.outputs.risk_level == 'high' || steps.prompt-injection.outputs.risk_level == 'critical')
+        run: |
+          echo "Workflow terminated due to HIGH/CRITICAL risk prompt injection detection"
+          echo "Risk level: ${{ steps.prompt-injection.outputs.risk_level }}"
+          echo "Issue has been flagged with security alert - no further processing will occur"
+          exit 0
+
+      - name: Determine if processing should continue
+        id: should-continue
+        run: |
+          if [ "${{ steps.prompt-injection.outputs.has_prompt_injection }}" = "true" ]; then
+            RISK_LEVEL="${{ steps.prompt-injection.outputs.risk_level }}"
+            if [ "$RISK_LEVEL" = "high" ] || [ "$RISK_LEVEL" = "critical" ]; then
+              echo "continue_processing=false" >> $GITHUB_OUTPUT
+              echo "Processing stopped due to high/critical risk"
+            else
+              echo "continue_processing=true" >> $GITHUB_OUTPUT
+              echo "Processing continues despite ${RISK_LEVEL} risk"
+            fi
+          else
+            echo "continue_processing=true" >> $GITHUB_OUTPUT
+            echo "No security concerns - processing continues"
+          fi
+
+      - name: Fetch existing issues for duplicate check
+        id: fetch-issues
+        if: steps.should-continue.outputs.continue_processing == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            
+            const issuesData = issues.data
+              .filter(issue => issue.number !== context.issue.number)
+              .map(issue => ({
+                issue_id: issue.number.toString(),
+                title: issue.title,
+                description: issue.body || '',
+                status: issue.state,
+                created_date: issue.created_at,
+                url: issue.html_url
+              }));
+            
+            const fs = require('fs');
+            fs.writeFileSync('existing_issues.json', JSON.stringify(issuesData, null, 2));
+            console.log(`Saved ${issuesData.length} issues to existing_issues.json`);
+
+      - name: Check for duplicate issues
+        id: duplicate-check
+        if: steps.should-continue.outputs.continue_processing == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_DESCRIPTION: ${{ github.event.issue.body }}
+        run: |
+          cd ai-triage
+          
+          echo "🔍 Checking for duplicate issues..."
+          
+          # Run duplicate check with JSON output and proper error handling
+          if python3 -m cli.duplicate_check \
+            --title "$ISSUE_TITLE" \
+            --description "$ISSUE_DESCRIPTION" \
+            --issues ../existing_issues.json \
+            --output json \
+            > ../duplicate_result.json 2> ../duplicate_error.log; then
+            
+            # Success - parse the result
+            if [ -f ../duplicate_result.json ] && [ -s ../duplicate_result.json ]; then
+              # Validate JSON
+              if jq empty ../duplicate_result.json 2>/dev/null; then
+                IS_DUPLICATE=$(jq -r '.is_duplicate' ../duplicate_result.json)
+                echo "is_duplicate=$IS_DUPLICATE" >> $GITHUB_OUTPUT
+                
+                if [ "$IS_DUPLICATE" = "true" ]; then
+                  DUPLICATE_OF=$(jq -r '.duplicate_of.issue_id' ../duplicate_result.json)
+                  echo "duplicate_of=$DUPLICATE_OF" >> $GITHUB_OUTPUT
+                  echo "⚠️ Duplicate detected: Issue #$DUPLICATE_OF"
+                else
+                  echo "✅ Not a duplicate"
+                fi
+              else
+                echo "⚠️ Invalid JSON in duplicate result, treating as not duplicate"
+                echo "is_duplicate=false" >> $GITHUB_OUTPUT
+                cat ../duplicate_result.json
+              fi
+            else
+              echo "⚠️ Empty duplicate result, treating as not duplicate"
+              echo "is_duplicate=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Command failed
+            echo "⚠️ Duplicate check failed, treating as not duplicate"
+            echo "Error log:"
+            cat ../duplicate_error.log || echo "No error log available"
+            echo "is_duplicate=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pass 1 - Librarian (Identify Relevant Files)
+        id: librarian
+        if: steps.duplicate-check.outputs.is_duplicate != 'true' && steps.should-continue.outputs.continue_processing == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          cd ai-triage
+          
+          echo "📚 Pass 1: Librarian - Analyzing directory chunks to identify relevant files..."
+          
+          # Create a directory map for Librarian
+          echo "Preparing directory chunks for analysis..."
+          cp -r ../repomix-chunks ./
+          ls -lh repomix-chunks/
+          
+          # Run Librarian with all directory chunks
+          python -m cli.librarian \
+            --title "${{ github.event.issue.title }}" \
+            --description "${{ github.event.issue.body }}" \
+            --chunks-dir repomix-chunks \
+            --output librarian_result.json \
+            --verbose
+          
+          if [ -f librarian_result.json ]; then
+            echo "librarian_success=true" >> $GITHUB_OUTPUT
+            echo "✅ Librarian identified relevant files from directory analysis"
+            
+            # Show identified files
+            echo "Relevant files identified:"
+            jq -r '.relevant_files[]' librarian_result.json | nl
+            
+            # Show analysis summary
+            if jq -e '.analysis_summary' librarian_result.json > /dev/null; then
+              echo ""
+              echo "Analysis summary:"
+              jq -r '.analysis_summary' librarian_result.json
+            fi
+            
+            cat librarian_result.json
+          else
+            echo "librarian_success=false" >> $GITHUB_OUTPUT
+            echo "❌ Librarian failed"
+          fi
+
+      - name: Create Targeted Repomix
+        id: targeted_repomix
+        if: steps.librarian.outputs.librarian_success == 'true'
+        run: |
+          echo "📦 Creating targeted repomix with FULL CONTENT for identified files..."
+          
+          # Extract file list from librarian result
+          FILE_LIST=$(jq -r '.relevant_files[]' ai-triage/librarian_result.json | tr '\n' ' ')
+          
+          if [ -z "$FILE_LIST" ]; then
+            echo "❌ No files identified by Librarian"
+            echo "targeted_success=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "Files identified by Librarian:"
+          jq -r '.relevant_files[]' ai-triage/librarian_result.json | nl
+          
+          # Get config values
+          REPO_URL=$(jq -r '.repository.url' triage.config.json)
+          
+          # Generate targeted repomix with FULL CONTENT (no compression)
+          # This is for Surgeon to do deep analysis
+          echo "Generating full content for Surgeon analysis..."
+          repomix \
+            --remote "$REPO_URL" \
+            --include $FILE_LIST \
+            --style plain \
+            --output targeted-repomix-output.txt || {
+            echo "⚠️ Targeted repomix with --include failed, trying alternative approach..."
+            # Fallback: generate full repo but we'll filter later
+            repomix --remote "$REPO_URL" --style plain --output targeted-repomix-output.txt
+          }
+          
+          if [ -f targeted-repomix-output.txt ]; then
+            echo "✅ Targeted repomix created successfully"
+            echo "Size comparison:"
+            echo "  Skeleton (compressed): $(wc -c < repomix-skeleton.txt) bytes"
+            echo "  Targeted (full content): $(wc -c < targeted-repomix-output.txt) bytes"
+            echo "targeted_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Failed to create targeted repomix"
+            echo "targeted_success=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pass 2 - Surgeon (Deep Analysis)
+        id: surgeon
+        if: steps.targeted_repomix.outputs.targeted_success == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_DESCRIPTION: ${{ github.event.issue.body }}
+        run: |
+          cd ai-triage
+          
+          echo "🔬 Pass 2: Surgeon - Deep analysis with targeted files..."
+          
+          # Copy targeted repomix for analysis
+          cp ../targeted-repomix-output.txt ./repomix-output.txt
+          
+          # Run full analysis (Surgeon) with targeted codebase
+          python -m cli.analyze \
+            --title "$ISSUE_TITLE" \
+            --description "$ISSUE_DESCRIPTION" \
+            --source-path repomix-output.txt \
+            --output ../analysis_result.txt \
+            --format text \
+            --retries 2
+          
+          # Also generate JSON for parsing
+          python -m cli.analyze \
+            --title "$ISSUE_TITLE" \
+            --description "$ISSUE_DESCRIPTION" \
+            --source-path repomix-output.txt \
+            --output ../analysis_result.json \
+            --format json \
+            --retries 2
+          
+          if [ -f ../analysis_result.txt ] && [ -f ../analysis_result.json ]; then
+            echo "surgeon_success=true" >> $GITHUB_OUTPUT
+            echo "✅ Surgeon analysis completed"
+          else
+            echo "surgeon_success=false" >> $GITHUB_OUTPUT
+            echo "❌ Surgeon analysis failed"
+          fi
+
+      - name: Parse Analysis Results
+        id: parse
+        if: steps.surgeon.outputs.surgeon_success == 'true'
+        run: |
+          cd ai-triage
+          
+          # Extract fields from analysis JSON
+          ISSUE_TYPE=$(jq -r '.issue_type' ../analysis_result.json)
+          SEVERITY=$(jq -r '.severity' ../analysis_result.json)
+          CONFIDENCE=$(jq -r '.confidence_score' ../analysis_result.json)
+          
+          echo "issue_type=$ISSUE_TYPE" >> $GITHUB_OUTPUT
+          echo "severity=$SEVERITY" >> $GITHUB_OUTPUT
+          echo "confidence=$CONFIDENCE" >> $GITHUB_OUTPUT
+          
+          echo "Parsed: Type=$ISSUE_TYPE, Severity=$SEVERITY, Confidence=$CONFIDENCE"
+
+      - name: Post duplicate issue comment
+        if: steps.duplicate-check.outputs.is_duplicate == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const duplicateData = JSON.parse(fs.readFileSync('duplicate_result.json', 'utf8'));
+            
+            const comment = `## 🔍 Duplicate Issue Detected
+            
+            This issue appears to be a duplicate of #${duplicateData.duplicate_of.issue_id}
+            
+            **Original Issue**: [#${duplicateData.duplicate_of.issue_id} - ${duplicateData.duplicate_of.title}](${duplicateData.duplicate_of.url})
+            
+            **Similarity Score**: ${(duplicateData.similarity_score * 100).toFixed(1)}%
+            **Confidence**: ${(duplicateData.confidence_score * 100).toFixed(1)}%
+            
+            ### Similarity Reasons
+            ${duplicateData.similarity_reasons.map(r => `- ${r}`).join('\n')}
+            
+            ### Recommendation
+            ${duplicateData.recommendation}
+            
+            ---
+            *This analysis was performed automatically using AI-powered duplicate detection.*`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+      - name: Post analysis as issue comment
+        if: steps.duplicate-check.outputs.is_duplicate != 'true' && steps.surgeon.outputs.surgeon_success == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read Librarian results
+            const librarianData = JSON.parse(fs.readFileSync('ai-triage/librarian_result.json', 'utf8'));
+            
+            // Read Surgeon analysis
+            let surgeonAnalysis = fs.readFileSync('analysis_result.txt', 'utf8');
+            
+            // Remove any existing disclaimers from surgeon analysis to avoid duplication
+            surgeonAnalysis = surgeonAnalysis
+              .replace(/🤖.*This analysis was generated by Gemini AI.*\n*/gi, '')
+              .replace(/🤖.*This analysis used the Two-Pass Architecture.*\n*/gi, '')
+              .replace(/---\s*$/g, '')
+              .trim();
+            
+            // Create comprehensive comment with consistent formatting
+            const comment = `## 🤖 AI Two-Pass Issue Triage
+            
+            ### 📚 Pass 1: Librarian (File Identification)
+            
+            Identified **${librarianData.relevant_files.length}** relevant file(s) for deep analysis:
+            
+            <details>
+            <summary><b>View Identified Files</b></summary>
+            
+            ${librarianData.relevant_files.map((f, i) => `${i + 1}. \`${f}\``).join('\n')}
+            
+            </details>
+            
+            ---
+            
+            ### 🔬 Pass 2: Surgeon (Deep Analysis)
+            
+            ${surgeonAnalysis}
+            
+            ---
+            
+            <sub>🤖 *This analysis used the Two-Pass Architecture: Librarian identified relevant files from directory chunks, then Surgeon performed deep analysis on those specific files for focused and accurate results.*</sub>`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+      - name: Add Labels Based on Analysis
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const isDuplicate = '${{ steps.duplicate-check.outputs.is_duplicate }}' === 'true';
+            const issueType = '${{ steps.parse.outputs.issue_type }}';
+            const severity = '${{ steps.parse.outputs.severity }}';
+            
+            // Get current labels on the issue
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const currentLabels = issue.labels.map(label => 
+              typeof label === 'string' ? label : label.name
+            );
+            
+            console.log(`Current labels: ${currentLabels.join(', ')}`);
+            
+            // Remove old type:* and severity:* labels and old type labels to avoid conflicts
+            const labelsToRemove = currentLabels.filter(label => 
+              label.startsWith('type:') || label.startsWith('severity:') ||
+              label.startsWith('Type : ') || label.startsWith('Severity : ') ||
+              ['Bug', 'Enhancement', 'Feature request', 'Documentation', 'Question', 'Task',
+               'Critical', 'High', 'Medium', 'Low'].includes(label)
+            );
+            
+            if (labelsToRemove.length > 0) {
+              console.log(`Removing old labels: ${labelsToRemove.join(', ')}`);
+              for (const label of labelsToRemove) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    name: label
+                  });
+                } catch (error) {
+                  console.log(`Failed to remove label ${label}: ${error.message}`);
+                }
+              }
+            }
+            
+            // Prepare new labels to add
+            const labels = [];
+            
+            // Add gemini-analyzed label (unless duplicate)
+            if (!isDuplicate && issueType) {
+              labels.push('gemini-analyzed');
+              
+              // Create and add type label with proper format
+              if (issueType && issueType !== 'null' && issueType !== '') {
+                const typeValue = issueType.charAt(0).toUpperCase() + issueType.slice(1).toLowerCase();
+                const typeLabel = `Type : ${typeValue}`;
+                const typeColors = {
+                  'Bug': 'd73a4a',
+                  'Enhancement': 'a2eeef',
+                  'Feature request': '0052cc',
+                  'Documentation': '0075ca',
+                  'Question': 'd876e3',
+                  'Task': '1d76db'
+                };
+                const typeColor = typeColors[typeValue] || 'ededed';
+                
+                // Create or update the label
+                try {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: typeLabel,
+                    color: typeColor,
+                    description: `AI-generated: Issue type classified as ${typeValue.toLowerCase()}`
+                  });
+                } catch (error) {
+                  if (error.status === 422) {
+                    await github.rest.issues.updateLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: typeLabel,
+                      color: typeColor,
+                      description: `AI-generated: Issue type classified as ${typeValue.toLowerCase()}`
+                    });
+                  }
+                }
+                
+                labels.push(typeLabel);
+              }
+              
+              // Create and add severity label with proper format
+              if (severity && severity !== 'null' && severity !== '') {
+                const severityValue = severity.charAt(0).toUpperCase() + severity.slice(1).toLowerCase();
+                const severityLabel = `Severity : ${severityValue}`;
+                const severityColors = {
+                  'Critical': 'b60205',
+                  'High': 'd93f0b',
+                  'Medium': 'fbca04',
+                  'Low': '0e8a16'
+                };
+                const severityColor = severityColors[severityValue] || 'ededed';
+                
+                // Create or update the label
+                try {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: severityLabel,
+                    color: severityColor,
+                    description: `AI-generated: Severity level assessed as ${severityValue.toLowerCase()}`
+                  });
+                } catch (error) {
+                  if (error.status === 422) {
+                    await github.rest.issues.updateLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: severityLabel,
+                      color: severityColor,
+                      description: `AI-generated: Severity level assessed as ${severityValue.toLowerCase()}`
+                    });
+                  }
+                }
+                
+                labels.push(severityLabel);
+              }
+            }
+            
+            // Add duplicate label
+            if (isDuplicate) {
+              labels.push('duplicate');
+            }
+            
+            if (labels.length > 0) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  labels: labels
+                });
+                console.log(`Added labels: ${labels.join(', ')}`);
+              } catch (error) {
+                console.error('Error adding labels:', error);
+              }
+            }
+
+      - name: Upload analysis artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: librarian-triage-issue-${{ github.event.issue.number }}
+          path: |
+            prompt_injection_result.json
+            existing_issues.json
+            duplicate_result.json
+            root-dirs.txt
+            repomix-chunks/
+            ai-triage/librarian_result.json
+            targeted-repomix-output.txt
+            analysis_result.txt
+            analysis_result.json
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 📊 Two-Pass Triage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Issue**: #${{ github.event.issue.number }} - ${{ github.event.issue.title }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Security Check**: ${{ steps.prompt-injection.outputs.risk_level || 'bypassed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Duplicate Check**: ${{ steps.duplicate-check.outputs.is_duplicate || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Librarian (Pass 1)**: ${{ steps.librarian.outputs.librarian_success || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Targeted Repomix**: ${{ steps.targeted_repomix.outputs.targeted_success || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Surgeon (Pass 2)**: ${{ steps.surgeon.outputs.surgeon_success || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.surgeon.outputs.surgeon_success }}" == "true" ]; then
+            echo "✅ Two-pass analysis completed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Results**:" >> $GITHUB_STEP_SUMMARY
+            echo "- Type: ${{ steps.parse.outputs.issue_type }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Severity: ${{ steps.parse.outputs.severity }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Confidence: ${{ steps.parse.outputs.confidence }}" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.duplicate-check.outputs.is_duplicate }}" == "true" ]; then
+            echo "⚠️ Duplicate issue detected - analysis skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Analysis incomplete - check logs for details" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Handle Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const errorComment = `## ⚠️ AI Two-Pass Triage Failed
+            
+            The automated two-pass issue triage encountered an error.
+            
+            **Possible causes:**
+            - API rate limits or connectivity issues
+            - Invalid API key configuration
+            - Issue content too large or complex
+            - Repomix generation failed
+            
+            **Action Required**: 
+            - Check the workflow logs for detailed error messages
+            - Verify the GEMINI_API_KEY secret is properly configured
+            - Ensure triage.config.json is properly configured
+            - Try removing and re-adding the "AI_Triage" label to retry
+            
+            ---
+            *Workflow Run*: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: errorComment
+            });
