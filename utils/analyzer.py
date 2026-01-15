@@ -241,28 +241,28 @@ Please analyze the issue and provide your response in the exact JSON format spec
                 return json.loads(json_block_match.group(1))
             except json.JSONDecodeError:
                 pass  # Try next strategy
-        
+
         # Strategy 2: Try to find a JSON object by counting braces
         try:
-            start_idx = response_text.find('{')
+            start_idx = response_text.find("{")
             if start_idx != -1:
                 brace_count = 0
                 end_idx = start_idx
                 for i in range(start_idx, len(response_text)):
-                    if response_text[i] == '{':
+                    if response_text[i] == "{":
                         brace_count += 1
-                    elif response_text[i] == '}':
+                    elif response_text[i] == "}":
                         brace_count -= 1
                         if brace_count == 0:
                             end_idx = i + 1
                             break
-                
+
                 if end_idx > start_idx:
                     json_str = response_text[start_idx:end_idx]
                     return json.loads(json_str)
         except json.JSONDecodeError:
             pass  # Try next strategy
-        
+
         # Strategy 3: Try greedy regex as last resort
         try:
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
@@ -270,7 +270,7 @@ Please analyze the issue and provide your response in the exact JSON format spec
                 return json.loads(json_match.group(0))
         except json.JSONDecodeError:
             pass
-        
+
         # All strategies failed, fall back to text extraction
         print("Warning: Could not parse JSON from Gemini response, using fallback text extraction")
         print(f"Response preview: {response_text[:500]}...")
@@ -298,12 +298,14 @@ Please analyze the issue and provide your response in the exact JSON format spec
         contributing_factors = []
         affected_components = []
         solutions = []
-        
+
         # Try to extract sections by looking for common patterns
-        cause_match = re.search(r"(?:primary[_\s]cause|root[_\s]cause)[:\s]*(.+?)(?:\n\n|\n[A-Z]|$)", text, re.IGNORECASE | re.DOTALL)
+        cause_match = re.search(
+            r"(?:primary[_\s]cause|root[_\s]cause)[:\s]*(.+?)(?:\n\n|\n[A-Z]|$)", text, re.IGNORECASE | re.DOTALL
+        )
         if cause_match:
             primary_cause = cause_match.group(1).strip()[:500]
-        
+
         # Extract solutions if present
         solution_pattern = r"(?:solution|fix|approach)[:\s]*(.+?)(?=(?:solution|fix|approach)[:\s]|\Z)"
         solution_matches = re.finditer(solution_pattern, text, re.IGNORECASE | re.DOTALL)
@@ -313,32 +315,36 @@ Please analyze the issue and provide your response in the exact JSON format spec
                 # Extract code changes if present
                 code_match = re.search(r"```.*?```", solution_text, re.DOTALL)
                 code_changes = code_match.group(0) if code_match else solution_text[:300]
-                
-                solutions.append({
-                    "description": solution_text[:200].split('\n')[0],  # First line as description
-                    "code_changes": code_changes,
+
+                solutions.append(
+                    {
+                        "description": solution_text[:200].split("\n")[0],  # First line as description
+                        "code_changes": code_changes,
+                        "location": {
+                            "file_path": "See analysis text",
+                            "line_number": None,
+                            "function_name": None,
+                            "class_name": None,
+                        },
+                        "rationale": "Extracted from unstructured response",
+                    }
+                )
+
+        # If no solutions found, create one with the full text
+        if not solutions:
+            solutions = [
+                {
+                    "description": "Please review the full analysis text below",
+                    "code_changes": text[:1000] if len(text) > 1000 else text,
                     "location": {
                         "file_path": "See analysis text",
                         "line_number": None,
                         "function_name": None,
                         "class_name": None,
                     },
-                    "rationale": "Extracted from unstructured response",
-                })
-        
-        # If no solutions found, create one with the full text
-        if not solutions:
-            solutions = [{
-                "description": "Please review the full analysis text below",
-                "code_changes": text[:1000] if len(text) > 1000 else text,
-                "location": {
-                    "file_path": "See analysis text",
-                    "line_number": None,
-                    "function_name": None,
-                    "class_name": None,
-                },
-                "rationale": "Full response text provided due to parsing failure",
-            }]
+                    "rationale": "Full response text provided due to parsing failure",
+                }
+            ]
 
         return {
             "issue_type": issue_type,
